@@ -1,0 +1,47 @@
+# Discovery worker patterns (certificate transparency).
+#
+# Sources, in order: crt.sh pattern queries, SSLMate Cert Spotter (new certificates for registrable
+# domains of reviewer-confirmed cases), CertStream live feed when reachable. Every candidate name is
+# then matched against `name_patterns`. Matches are captured with the normal safe pipeline at a
+# strict rate limit and High risk / Caution results go to the reviewer discovery queue. Nothing is
+# published or alerted on without review.
+#
+# Brand-like words are NOT listed here (no third-party names in the repo): the worker derives them at
+# runtime from hostnames of reviewer-confirmed fraudulent cases (e.g. "<word>-vip" -> "%<word>-vip%").
+
+# crt.sh identity queries (SQL LIKE syntax, % = wildcard). Keep them specific; broad ones time out.
+crtsh_queries:
+  - "%-vip.shop"
+  - "%-vip.store"
+  - "%-vip.buzz"
+  - "%vip%.quest"
+  - "uae%.shop"
+  - "uae%.buzz"
+  - "%dubai%job%"
+  - "%uae%task%"
+  - "%task%vip%"
+  - "%order%vip%"
+
+# Regular expressions applied to every candidate hostname (lowercase, wildcard prefix removed).
+name_patterns:
+  - name: brandlike_vip
+    regex: '(^|\.)[a-z]{3,}-?s?vip\d{0,3}\.(shop|store|buzz|top|vip|online|xyz|quest|space|cc|icu|site|club|live|fun)$'
+  - name: task_order_portal
+    regex: '(task|tasks|order|orders|grab|mission|rating|ratings)[-.]?(vip|shop|mall|hub|pro|online|plus)'
+  - name: uae_terms
+    regex: '(uae|dubai|abudhabi|abu-dhabi|emirates|sharjah|ajman)[-.]?(job|jobs|task|tasks|work|vip|mall|shop|career|careers|hiring)'
+  - name: arabic_transliteration
+    regex: '(wazifa|wazifah|wazayef|wadhifa|shoghl|daraham|dirhams?|amal-online|rizq)'
+  - name: country_portal
+    regex: '^(uae\d?|ae\d?|sa|ksa|kw|om|qa|bh|eg|jo|ma|iq)\.[a-z0-9-]+\.(shop|buzz|quest|online|space|top|me|store|vip)$'
+
+# Names never queued (infrastructure noise).
+exclude:
+  - '^(www\.)?(cpanel|webmail|mail|autodiscover|cpcalendars|cpcontacts|webdisk)\.'
+  - '\.(cloudflaressl|amazonaws|herokuapp|vercel|netlify)\.'
+
+# Extra registrable domains to monitor with Cert Spotter (reviewed cases are added automatically).
+certspotter_domains: []
+
+# Optional brand-like words for local use (keep empty in the repository).
+extra_brand_terms: []
