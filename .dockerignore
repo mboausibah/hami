@@ -1,0 +1,13 @@
+# Keep private data, local state and client builds out of the image.
+data/
+.env
+.venv/
+**/__pycache__/
+**/*.pyc
+backend/storage/
+backend/tests/
+clients/
+docs/
+scripts/
+.git/
+*.sqlite3

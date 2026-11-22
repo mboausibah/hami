@@ -231,8 +231,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     settings.ensure_dirs()
     if not settings.discovery_enabled:
-        log("DISCOVERY_ENABLED=false; exiting")
-        return 0
+        log("DISCOVERY_ENABLED=false: idle (set DISCOVERY_ENABLED=true in .env to run)")
+        if args.once:
+            return 0
+        while True:  # stay up quietly so a container supervisor does not restart-loop
+            time.sleep(600)
     while True:
         cycle(capture=not args.no_capture, certstream_seconds=args.certstream_seconds, extra_domains=args.domain,
               skip_crtsh=args.skip_crtsh)

@@ -1,0 +1,47 @@
+# Production-style run: Hami API + discovery worker sharing one volume (SQLite DB, artifacts, models).
+#   cp .env.example .env   # set HAMI_REVIEWER_TOKEN
+#   docker compose up -d --build
+# API and reviewer console: http://localhost:8000 (/review). Put HTTPS in front for public use (Phase 2).
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: hami:latest
+    env_file: .env
+    environment:
+      HAMI_DATA_DIR: /data
+      HAMI_MODELS_DIR: /data/models
+      HAMI_PROCESSED_DIR: /data/processed
+      # Synthetic test sites inside the container (for scripts/e2e_check.py against this API).
+      RUN_TESTSITES: "true"
+      TESTSITE_PORT: "8100"
+    ports:
+      - "8000:8000"
+    volumes:
+      - hami-data:/data
+    shm_size: "1gb"
+    init: true
+    restart: unless-stopped
+
+  discovery:
+    image: hami:latest
+    depends_on:
+      api:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      HAMI_DATA_DIR: /data
+      HAMI_MODELS_DIR: /data/models
+      HAMI_PROCESSED_DIR: /data/processed
+    command: ["python", "-m", "app.discovery.worker"]
+    healthcheck:
+      disable: true
+    volumes:
+      - hami-data:/data
+    shm_size: "1gb"
+    init: true
+    restart: unless-stopped
+
+volumes:
+  hami-data: {}
