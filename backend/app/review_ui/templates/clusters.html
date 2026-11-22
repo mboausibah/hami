@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>{{ t('clusters') }}</h1>
+  <p class="muted">{{ t('lead_note') }} {{ t('clusters_note') }}</p>
+  {% if not clusters %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
+  <table>
+    {% if clusters %}<tr><th>Cluster</th><th>{{ t('members') }}</th><th>{{ t('brief') }}</th></tr>{% endif %}
+    {% for c in clusters %}
+    <tr><td><a href="/review/scans/{{ c.id }}">#{{ c.id }}</a></td>
+      <td>{% for h in c.hosts %}<span class="mono">{{ defang(h) }}</span>{% if not loop.last %}, {% endif %}{% endfor %} <span class="muted">({{ c.scans }} scans)</span></td>
+      <td><a class="btn secondary" href="/review/clusters/{{ c.id }}/brief?format=md">{{ t('export_md') }}</a>
+          <a class="btn secondary" href="/review/clusters/{{ c.id }}/brief?format=json">{{ t('export_json') }}</a></td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

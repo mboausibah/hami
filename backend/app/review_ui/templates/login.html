@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:420px;margin:60px auto">
+  <h1>{{ t('title') }}</h1>
+  {% if not configured %}<p class="muted">HAMI_REVIEWER_TOKEN is not set in .env.</p>{% endif %}
+  {% if error %}<div class="flash">{{ t('bad_token') }}</div>{% endif %}
+  <form method="post" action="/review/login">
+    <label>{{ t('token') }}</label>
+    <input type="password" name="token" autocomplete="current-password" autofocus required>
+    <p><button>{{ t('login') }}</button></p>
+  </form>
+</div>
+{% endblock %}

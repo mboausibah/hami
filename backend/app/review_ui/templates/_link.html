@@ -1,0 +1,25 @@
+<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px">
+  <div><strong>Link #{{ l.link_id }}</strong>:
+    <a href="/review/scans/{{ l.scan_a }}" class="mono">{{ defang(l.host_a) }}</a> ↔
+    <a href="/review/scans/{{ l.scan_b }}" class="mono">{{ defang(l.host_b) }}</a>
+    · {{ t('relation') }} <strong>{{ l.relation_type }}</strong>
+    · <span class="s-{{ l.strength }}">{{ l.strength }}</span>
+    · <span class="badge t-{{ 'no_strong_signals' if l.review_status == 'approved' else ('high_risk' if l.review_status == 'rejected' else 'caution') }}">{{ t(l.review_status) }}</span>
+    {% if l.reviewed_at %}<span class="muted">{{ l.reviewed_at[:16].replace('T',' ') }}</span>{% endif %}
+  </div>
+  <ul>
+    {% for e in l.evidence %}
+    <li><span class="s-{{ e.strength }}">[{{ e.strength }}]</span> {{ e.relation }}: {{ e.detail }}
+      <span class="muted">obs {{ e.obs_ids | join(',') or '-' }} · artifacts {{ e.artifact_ids | join(',') or '-' }}</span></li>
+    {% endfor %}
+  </ul>
+  {% if l.review_status == 'pending' %}
+  <form class="inline" method="post" action="/review/links/{{ l.link_id }}/review">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ path }}">
+    <input type="hidden" name="decision" value="approve"><button>{{ t('approve') }}</button></form>
+  <form class="inline" method="post" action="/review/links/{{ l.link_id }}/review">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ path }}">
+    <input type="hidden" name="decision" value="reject"><button class="danger">{{ t('reject') }}</button></form>
+  {% endif %}
+  <span class="muted">{{ t('lead_note') }}</span>
+</div>

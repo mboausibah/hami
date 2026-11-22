@@ -1,0 +1,5 @@
+# Authorized files for the static check: copies of the synthetic Site A bundle (fictional brand).
+# Every credential in this folder is deliberately FAKE and exists only for automated tests.
+related_hosts:
+  "site-a/*": site-a.localhost
+  "site-b/*": site-b.localhost

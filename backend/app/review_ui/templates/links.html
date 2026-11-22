@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>{{ t('links') }}</h1>
+  <div class="filters">{% for s in ['pending','approved','rejected'] %}<a href="/review/links?status={{ s }}" class="{{ 'on' if status == s }}">{{ t(s) }}</a>{% endfor %}</div>
+  <p class="muted">{{ t('links_note') }}</p>
+  {% if not links %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
+  {% for l in links %}{% include "_link.html" %}{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+{
+  "comment": "synthetic test file - every value below is FAKE",
+  "api_key": "test-fake-api-key-000111",
+  "support_contact": "wa.me/[phone]",
+  "jwt_sample": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlLXRlc3QifQ.ZmFrZS1zaWduYXR1cmU"
+}

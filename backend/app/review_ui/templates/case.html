@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>{{ t('case') }} #{{ p.scan_id }} · <span class="mono">{{ defang(p.final_url or p.url) }}</span></h1>
+  <p>
+    <span class="badge t-{{ p.tier or 'none' }}">{{ t(p.tier) if p.tier else '-' }}</span>
+    · {{ t('score') }} {{ '%.3f'|format(p.score) if p.score is not none else 'n/a' }}
+    · {{ t('model') }} <span class="mono">{{ p.model_version or 'none' }}</span>
+    · {{ t('live') if p.capture_mode == 'live' else t('stored') }}{% if p.stored_from_scan_id %} (<a href="/review/scans/{{ p.stored_from_scan_id }}">#{{ p.stored_from_scan_id }}</a>){% endif %}
+    · {{ p.source_type }}{% if p.listing_name %} · listing “{{ p.listing_name }}”{% endif %}
+    · {{ t('identity') }}: {{ p.identity_check }}
+    · captured {{ (p.captured_at or '')[:19].replace('T',' ') }} · {{ p.duration_ms or '-' }} ms
+    · {{ t('watchers') }}: {{ watchers }}
+  </p>
+  <p class="en"><strong>{{ p.headline.en if p.headline }}</strong></p>
+  <p class="ar"><strong>{{ p.headline.ar if p.headline }}</strong></p>
+  <p>
+    <a class="btn secondary" href="/review/clusters/{{ p.scan_id }}/brief?format=md">{{ t('brief') }} · {{ t('export_md') }}</a>
+    <a class="btn secondary" href="/review/clusters/{{ p.scan_id }}/brief?format=json">{{ t('export_json') }}</a>
+    <form class="inline" method="post" action="/review/scans/{{ p.scan_id }}/reanalyze"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary">{{ t('reanalyze') }}</button></form>
+  </p>
+</div>
+
+<div class="row">
+  <div class="col">
+    <div class="card">
+      <h2>{{ t('clues') }}</h2>
+      {% if not p.clues %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
+      {% for c in p.clues %}
+        <div style="margin-bottom:10px">
+          <div class="en">{{ c.text.en }}</div><div class="ar">{{ c.text.ar }}</div>
+          {% if c.excerpt %}<div class="muted mono">“{{ c.excerpt }}” ({{ c.excerpt_lang }}) · obs #{{ c.obs_id }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <h3>{{ t('rules') }}</h3>
+      <p class="mono">{{ p.rules_fired | join(', ') }}</p>
+      {% if p.strong_links %}<h3>Reviewed-case links</h3><p class="mono">{{ p.strong_links }}</p>{% endif %}
+      {% if p.top_phrases %}<h3>{{ t('top_phrases') }}</h3>
+        <p>{% for ph in p.top_phrases %}<span class="badge t-none">{{ ph.phrase }} {{ ph.weight }}</span> {% endfor %}</p>{% endif %}
+    </div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <h2>{{ t('label_form') }}</h2>
+      <form method="post" action="/review/scans/{{ p.scan_id }}/review">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <p>
+          {% for l in ['fraudulent','legitimate','inconclusive'] %}
+          <label class="chk"><input type="radio" name="label" value="{{ l }}" required> {{ t(l) }}</label>
+          {% endfor %}
+        </p>
+        <p><strong>{{ t('behavior_tags') }}</strong><br>
+          {% for tg in tags %}<label class="chk"><input type="checkbox" name="behavior_tags" value="{{ tg }}"> {{ tg }}</label>{% endfor %}</p>
+        <p><strong>{{ t('scam_type') }}</strong>
+          <select name="scam_type"><option value="">-</option>{% for s in scam_types %}<option>{{ s }}</option>{% endfor %}</select></p>
+        <p><textarea name="notes" rows="2" placeholder="{{ t('notes') }}"></textarea></p>
+        <p><label class="chk"><input type="checkbox" name="training_eligible" checked> {{ t('training_eligible') }}</label>
+           <span class="muted">{{ t('never_trains') }}</span></p>
+        <button>{{ t('save') }}</button>
+      </form>
+      <h3>{{ t('review_history') }}</h3>
+      {% if not history %}<p class="muted">{{ t('not_reviewed') }}</p>{% endif %}
+      <table>
+        {% for h in history %}
+        <tr style="{{ 'opacity:.55;text-decoration:line-through' if h.superseded }}">
+          <td>#{{ h.review_id }}</td><td><strong>{{ t(h.label) }}</strong> {{ h.behavior_tags | join(', ') }} {{ h.scam_type or '' }}</td>
+          <td class="muted">{{ h.created_at[:19].replace('T',' ') }} · {{ h.reviewer }}{% if h.supersedes %} · {{ t('supersedes') }} #{{ h.supersedes }}{% endif %}
+            {% if h.superseded %} · {{ t('superseded') }}{% endif %}{% if h.training_eligible %} · train{% endif %}</td>
+        </tr>
+        {% if h.notes %}<tr><td></td><td colspan="2" class="muted">{{ h.notes }}</td></tr>{% endif %}
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('screenshots') }}</h2>
+  <div class="grid">
+    {% for s in shots %}
+    <div class="shot"><a href="/review/artifacts/{{ s.artifact_id }}" target="_blank" rel="noopener"><img loading="lazy" src="/review/artifacts/{{ s.artifact_id }}" alt="step {{ s.action_step }}"></a>
+      <div class="muted">step {{ s.action_step }} · {{ s.action }} · {{ s.captured_at[:19].replace('T',' ') }}</div></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('links') }}</h2>
+  {% if not links %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
+  {% for l in links %}
+    {% include "_link.html" %}
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>{{ t('alerts') }}</h2>
+  {% if not alerts %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
+  {% for a in alerts %}{% include "_alert.html" %}{% endfor %}
+</div>
+
+<div class="card">
+  <h2>{{ t('observations') }}</h2>
+  <table>
+    <tr><th>#</th><th>type</th><th>{{ t('strength') }}</th><th>excerpt / host</th><th>context</th><th>step</th></tr>
+    {% for o in obs %}
+    <tr><td>{{ o.obs_id }}</td><td>{{ o.indicator_type }}</td><td class="s-{{ o.strength }}">{{ o.strength }}</td>
+      <td>{% if o.host_ref %}<span class="mono">{{ defang(o.host_ref) }}</span> <span class="muted">{{ o.host_relation }}</span>{% else %}{{ o.redacted_excerpt or '' }}{% endif %}
+        {% if o.site_reported_time %}<span class="muted">site-reported {{ o.site_reported_time }}</span>{% endif %}</td>
+      <td class="mono">{{ o.context or '' }}</td><td>{{ o.action_step if o.action_step is not none else '' }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="row">
+  <div class="col"><div class="card">
+    <h2>{{ t('assessments') }}</h2>
+    <table>{% for a in assessments %}
+      <tr><td>#{{ a.assessment_id }}</td><td><span class="badge t-{{ a.risk_tier }}">{{ t(a.risk_tier) }}</span></td>
+        <td>{{ '%.3f'|format(a.score) if a.score is not none else '-' }}</td><td class="mono">{{ a.rules | join(', ') }}</td>
+        <td class="muted">{{ a.model_version or '' }} · {{ a.created_at[:19].replace('T',' ') }}</td></tr>{% endfor %}</table>
+    {% if other_scans %}<h3>{{ t('other_scans') }}</h3>
+      <p>{% for o in other_scans %}<a href="/review/scans/{{ o.scan_id }}">#{{ o.scan_id }}</a> <span class="badge t-{{ o.tier or 'none' }}">{{ t(o.tier) if o.tier else '-' }}</span> {% endfor %}</p>{% endif %}
+  </div></div>
+  <div class="col"><div class="card">
+    <h2>{{ t('artifacts') }}</h2>
+    <table>{% for a in p.artifacts %}
+      <tr><td><a href="/review/artifacts/{{ a.artifact_id }}">{{ a.kind }}</a>{% if a.action_step is not none %} (step {{ a.action_step }}){% endif %}</td>
+        <td class="mono">{{ a.sha256 }}</td><td class="muted">{{ (a.size_bytes / 1024) | round(1) }} KB</td></tr>{% endfor %}</table>
+    <p class="muted">{{ t('raw_note') }}</p>
+  </div></div>
+</div>
+{% endblock %}

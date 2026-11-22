@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>{{ t('discovery') }}</h1>
+  <div class="filters">
+    <a href="/review/discovery" class="{{ 'on' if show == 'relevant' }}">{{ t('relevant') }}</a>
+    <a href="/review/discovery?show=all" class="{{ 'on' if show == 'all' }}">{{ t('all') }}</a>
+  </div>
+  <p class="muted">{{ t('discovery_note') }}</p>
+  {% if not rows %}<p class="muted">{{ t('no_items') }}</p>{% else %}
+  <table>
+    <tr><th>{{ t('domain') }}</th><th>{{ t('source') }}</th><th>{{ t('matched_pattern') }}</th><th>{{ t('cert_seen') }}</th><th>{{ t('status') }}</th><th>{{ t('tier') }}</th><th></th></tr>
+    {% for r in rows %}
+    <tr>
+      <td class="mono">{{ defang(r.domain) }}</td>
+      <td>{{ r.source }}{% if r.evidence and r.evidence.relation %}<div class="muted">{{ r.evidence.relation }}</div>{% endif %}</td>
+      <td class="mono">{{ r.matched_pattern or '' }}</td>
+      <td class="muted">{{ (r.cert_seen_at or '')[:16].replace('T',' ') }}</td>
+      <td>{{ r.status }}<div class="muted">{{ r.status_note or '' }}</div></td>
+      <td>{% if r.tier %}<span class="badge t-{{ r.tier }}">{{ t(r.tier) }}</span> {{ '%.2f'|format(r.score) if r.score is not none }}{% endif %}</td>
+      <td>
+        {% if r.scan_id %}<a class="btn secondary" href="/review/scans/{{ r.scan_id }}">{{ t('open') }}</a>{% endif %}
+        {% if r.status in ['awaiting_approval','failed','queued'] %}
+        <form class="inline" method="post" action="/review/discovery/{{ r.id }}/capture"><input type="hidden" name="csrf" value="{{ csrf }}"><button>{{ t('capture_now') }}</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

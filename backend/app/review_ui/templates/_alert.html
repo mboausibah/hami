@@ -1,0 +1,21 @@
+<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px">
+  <div><strong>Alert #{{ a.alert_id }}</strong> · {{ t('status') }}
+    <span class="badge t-{{ 'caution' if a.status == 'pending' else ('no_strong_signals' if a.status == 'approved' else 'none') }}">{{ t(a.status) }}</span>
+    · watched <span class="mono">{{ defang(a.watched_host) }}</span> → related <a class="mono" href="/review/scans/{{ a.related_scan_id }}">{{ a.related_host_defanged }}</a>
+    {% if a.related_tier %}<span class="badge t-{{ a.related_tier }}">{{ t(a.related_tier) }}</span>{% endif %}
+    · link #{{ a.link_id }}{% if a.link_status %} ({{ t(a.link_status) }}){% endif %}
+    {% if a.watchers is defined %} · {{ t('watchers') }}: {{ a.watchers }}{% endif %}
+  </div>
+  <div class="en">{{ a.reason.en }}</div><div class="ar">{{ a.reason.ar }}</div>
+  <div class="muted">created {{ a.created_at[:16].replace('T',' ') }}{% if a.sent_at %} · sent {{ a.sent_at[:16].replace('T',' ') }} by {{ a.approved_by }}{% endif %}
+    {% if a.withdrawn_at %} · withdrawn {{ a.withdrawn_at[:16].replace('T',' ') }}: {{ a.withdrawn_reason or '' }}{% endif %}</div>
+  {% if a.status == 'pending' %}
+  <form class="inline" method="post" action="/review/alerts/{{ a.alert_id }}/approve">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ path }}"><button>{{ t('approve') }}</button></form>
+  {% endif %}
+  {% if a.status in ['pending','approved'] %}
+  <form class="inline" method="post" action="/review/alerts/{{ a.alert_id }}/withdraw">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ path }}">
+    <input type="text" name="reason" placeholder="{{ t('reason') }}" style="width:220px"> <button class="danger">{{ t('withdraw') }}</button></form>
+  {% endif %}
+</div>

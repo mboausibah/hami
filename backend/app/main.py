@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from app.api.routes import reviewer, router
 from app.config import settings
@@ -26,6 +27,14 @@ def create_app() -> FastAPI:
     )
     app.include_router(router)
     app.include_router(reviewer)
+    from app.review_ui import ui
+
+    app.include_router(ui)
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse("/review")
+
     if settings.run_testsites:
         from app.testsites import start_in_thread
 

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% macro fmt(v) %}{{ '%.3f'|format(v) if v is not none else 'n/a' }}{% endmacro %}
+{% macro mrow(name, m) %}
+<tr><td>{{ name }}</td><td>{{ fmt(m.precision) }}</td><td>{{ fmt(m.recall) }}</td><td>{{ fmt(m.fpr_legit) }}</td><td>{{ fmt(m.pr_auc) }}</td>
+  <td class="muted">{{ m.n }} ({{ m.n_fraudulent }} fraud / {{ m.n_legitimate }} legit)</td></tr>
+{% endmacro %}
+{% block content %}
+{% if job and job.status == 'running' %}<meta http-equiv="refresh" content="3">{% endif %}
+<div class="card">
+  <h1>{{ t('train') }}</h1>
+  <p>Current model: <span class="mono">{{ current or 'none' }}</span></p>
+  <form method="post" action="/review/train">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {{ t('train_kind') }}:
+    <label class="chk"><input type="radio" name="kind" value="full" checked> {{ t('train_full') }}</label>
+    <label class="chk"><input type="radio" name="kind" value="synthetic"> {{ t('train_syn') }}</label>
+    <button {{ 'disabled' if job and job.status == 'running' }}>{{ t('train_now') }}</button>
+  </form>
+  {% if job %}<p class="muted">Last job {{ job.job_id }}: <strong>{{ job.status }}</strong> (started {{ job.started_at[:19].replace('T',' ') }}{% if job.finished_at %}, finished {{ job.finished_at[:19].replace('T',' ') }}{% endif %})</p>
+    {% if job.status == 'running' %}<p>{{ t('running') }}</p>{% endif %}
+    {% if job.error %}<pre class="mono">{{ job.error }}</pre>{% endif %}{% endif %}
+</div>
+
+{% if result %}
+{% set h = result.metrics.held_out %}
+<div class="card">
+  <h2>{{ t('held_out') }} — <span class="mono">{{ result.version }}</span> ({{ result.status }})</h2>
+  <p class="muted">dataset {{ result.dataset_version }} · hash <span class="mono">{{ result.dataset_hash[:16] }}</span> ·
+    split: train {{ result.metrics.split.train }} records / test {{ result.metrics.split.test }} records ({{ result.metrics.split.test_kits | length }} kits held out, kit-grouped)</p>
+  <table>
+    <tr><th></th><th>Precision</th><th>Recall</th><th>FPR (legit)</th><th>PR-AUC</th><th>n</th></tr>
+    {{ mrow('Classifier (score ≥ agree threshold)', h.overall) }}
+    {{ mrow('High-risk rule (strong behavior + classifier)', h.tier_high_risk_rule) }}
+    {{ mrow('Caution or above', h.caution_or_above) }}
+    {% for k, m in h.per_language.items() %}{{ mrow('language: ' ~ k, m) }}{% endfor %}
+    {% for k, m in h.per_source.items() %}{{ mrow('source: ' ~ k, m) }}{% endfor %}
+  </table>
+  <div class="row">
+    <div class="col"><h3>Per scam type (recall)</h3><table>{% for k, v in h.per_scam_type.items() %}<tr><td>{{ k }}</td><td>{{ fmt(v.recall) }}</td><td class="muted">n={{ v.n }}</td></tr>{% endfor %}</table></div>
+    <div class="col"><h3>Per behavior tag (recall)</h3><table>{% for k, v in h.per_behavior_tag.items() %}<tr><td>{{ k }}</td><td>{{ fmt(v.recall) }}</td><td class="muted">n={{ v.n }}</td></tr>{% endfor %}</table></div>
+  </div>
+  <h3>Baselines on the same URL-bearing held-out examples (n={{ result.metrics.baselines.n_test_with_url }})</h3>
+  {% if result.metrics.baselines.note %}<p class="muted">{{ result.metrics.baselines.note }}</p>{% else %}
+  <table><tr><th></th><th>Precision</th><th>Recall</th><th>FPR (legit)</th><th>PR-AUC</th><th>n</th></tr>
+    {% for k in ['url_only','url_plus_text','full_model'] %}{% if result.metrics.baselines[k] %}{{ mrow(k, result.metrics.baselines[k]) }}{% endif %}{% endfor %}</table>{% endif %}
+  <h3>{{ t('promotion') }}</h3>
+  {% set pr = result.promotion %}
+  <p>{% if pr.current_metrics %}Compared with <span class="mono">{{ pr.current }}</span> on the same held-out set:
+     recall not lower = <strong>{{ pr.recall_not_lower }}</strong>, FPR not higher = <strong>{{ pr.fpr_not_higher }}</strong> →
+     <strong>{{ 'promoted' if pr.promoted else 'kept as candidate' }}</strong>
+     (current: R {{ fmt(pr.current_metrics.recall) }}, FPR {{ fmt(pr.current_metrics.fpr_legit) }})
+     {% else %}{{ pr.reason }} → promoted{% endif %}</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>{{ t('model_versions') }}</h2>
+  <table><tr><th>Version</th><th>{{ t('status') }}</th><th>Dataset</th><th>Recall</th><th>FPR</th><th>Created</th></tr>
+  {% for v in versions %}
+    <tr><td class="mono">{{ v.version }}</td><td>{{ v.status }}</td>
+      <td class="mono">{{ v.dataset_version }}<br>{{ v.dataset_hash[:12] }} {% if v.dataset %}({{ v.dataset.record_count }} records){% endif %}</td>
+      <td>{{ fmt(v.metrics.held_out.overall.recall) }}</td><td>{{ fmt(v.metrics.held_out.overall.fpr_legit) }}</td>
+      <td class="muted">{{ v.created_at[:19].replace('T',' ') }}</td></tr>
+  {% endfor %}</table>
+</div>
+{% endblock %}

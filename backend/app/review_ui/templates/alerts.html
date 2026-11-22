@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>{{ t('alerts') }}</h1>
+  <div class="filters">{% for s in ['pending','approved','withdrawn','cancelled'] %}<a href="/review/alerts?status={{ s }}" class="{{ 'on' if status == s }}">{{ t(s) }}</a>{% endfor %}</div>
+  <p class="muted">{{ t('alerts_note') }}</p>
+  {% if not alerts %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
+  {% for a in alerts %}{% include "_alert.html" %}{% endfor %}
+</div>
+{% endblock %}
