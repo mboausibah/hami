@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaMart VIP | Part-time online jobs</title>
+<meta property="og:site_name" content="NovaMart VIP">
+<link rel="icon" href="https://cdn.novalogo-assets.test/nova/favicon.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" defer></script>
+<script src="https://static.cloudflareinsights.com/beacon.min.js" defer></script>
+<style>
+body{margin:0;font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:#fff7ef;color:#2b1d0e}
+.nm-top{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#ff7a00;color:#fff}
+.nm-logo{font-weight:800;font-size:20px;display:flex;gap:8px;align-items:center}
+.nm-logo img{width:28px;height:28px;border-radius:6px;background:#fff}
+.nm-wrap{max-width:900px;margin:auto;padding:16px}
+.nm-card{background:#fff;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.nm-vip td{border-bottom:1px solid #f1e3d3;padding:6px 10px}
+.nm-btn{background:#ff7a00;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+.nm-lang{background:#fff;color:#ff7a00;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
+[data-lang=ar]{display:none}
+body.ar [data-lang=ar]{display:block}body.ar [data-lang=en]{display:none}
+#countries li{padding:4px 0}
+</style>
+</head>
+<body>
+<header class="nm-top">
+  <div class="nm-logo"><img src="https://cdn.novalogo-assets.test/nova/logo.png" alt="NovaMart VIP"> NovaMart VIP</div>
+  <div>
+    <button type="button" class="nm-lang" id="lang-ar" onclick="setLang('ar')">العربية</button>
+    <button type="button" class="nm-lang" id="lang-en" onclick="setLang('en')" style="display:none">English</button>
+  </div>
+</header>
+<main class="nm-wrap">
+  <section class="nm-card" data-lang="en">
+    <h1>Part-time online jobs in Dubai</h1>
+    <p>Work from your phone: rate products and complete daily tasks. Earn AED 300 to AED 900 per day.</p>
+    <p>New members receive their first 30 orders free. Commission 0.5% per order.</p>
+  </section>
+  <section class="nm-card" data-lang="ar">
+    <h1>وظائف بدوام جزئي عبر الإنترنت في دبي</h1>
+    <p>اعمل من هاتفك: قيّم المنتجات وأكمل المهام اليومية. اربح من ٣٠٠ إلى ٩٠٠ درهم يوميًا.</p>
+    <p>عمولة ٠٫٥٪ على كل طلب.</p>
+  </section>
+
+  <section class="nm-card" id="recharge">
+    <h2 data-lang="en">Recharge</h2><h2 data-lang="ar">شحن الرصيد</h2>
+    <p data-lang="en">Recharge AED 500 to unlock paid tasks. Higher VIP levels unlock bigger commissions.</p>
+    <p data-lang="ar">اشحن ٥٠٠ درهم لفتح المهام المدفوعة. المستويات الأعلى تفتح عمولات أكبر.</p>
+    <table class="nm-vip">
+      <tr><td>VIP 1</td><td>AED 500</td><td>40 orders / day</td><td>0.5%</td></tr>
+      <tr><td>VIP 2</td><td>AED 1,500</td><td>60 orders / day</td><td>0.8%</td></tr>
+      <tr><td>VIP 3</td><td>AED 5,000</td><td>80 orders / day</td><td>1.2%</td></tr>
+    </table>
+    <p data-lang="en">Withdrawal is available only after completing 40 orders in your current level.</p>
+    <p data-lang="ar">السحب متاح فقط بعد إكمال ٤٠ طلبًا في مستواك الحالي.</p>
+  </section>
+
+  <section class="nm-card">
+    <h2 data-lang="en">Join</h2><h2 data-lang="ar">انضم الآن</h2>
+    <form class="nm-reg" action="/register" method="post" onsubmit="return false">
+      <label for="phone">Phone number / رقم الهاتف</label> <input id="phone" name="phone" type="tel"><br>
+      <label for="inviteCode">Invitation code / رمز الدعوة</label> <input id="inviteCode" name="inviteCode" type="text"><br>
+      <button type="submit" class="nm-btn">Register</button>
+    </form>
+    <p>Customer service 24/7: <a href="https://wa.me/971500000000">WhatsApp</a></p>
+  </section>
+
+  <section class="nm-card">
+    <button type="button" class="nm-btn" id="country-btn" onclick="loadCountries()">Select country / اختر الدولة</button>
+    <ul id="countries"></ul>
+  </section>
+</main>
+<script>
+function setLang(l){
+  document.body.classList.toggle('ar', l==='ar');
+  document.documentElement.dir = l==='ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = l;
+  document.getElementById('lang-ar').style.display = l==='ar' ? 'none' : '';
+  document.getElementById('lang-en').style.display = l==='ar' ? '' : 'none';
+}
+function loadCountries(){
+  fetch('/api/countries.json').then(r => r.json()).then(j => {
+    const ul = document.getElementById('countries'); ul.innerHTML = '';
+    j.data.forEach(c => { const li = document.createElement('li'); li.textContent = c.name + ' — ' + c.currencyCode; ul.appendChild(li); });
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "code": "200",
+  "msg": "success",
+  "data": [
+    {"id": 1, "name": "United Arab Emirates", "languageCode": "ar-AE", "currencyCode": "AED",
+     "domainUrl": "http://site-a.localhost:8100/register", "logoUrl": "https://cdn.novalogo-assets.test/nova/logo.png",
+     "createTime": "2026-11-01 09:12:00", "updateTime": "2026-11-03 15:50:35"},
+    {"id": 2, "name": "Saudi Arabia", "languageCode": "ar-SA", "currencyCode": "SAR",
+     "domainUrl": "http://site-b.localhost:8100/register", "logoUrl": "https://cdn.novalogo-assets.test/orbita/logo.png",
+     "createTime": "2026-11-01 09:12:00", "updateTime": "2026-11-03 15:50:36"},
+    {"id": 3, "name": "Oman", "languageCode": "ar-OM", "currencyCode": "OMR",
+     "domainUrl": "http://site-b.localhost:8100/register", "logoUrl": "https://cdn.novalogo-assets.test/orbita/logo.png",
+     "createTime": "2026-11-02 10:00:00", "updateTime": "2026-11-05 05:21:55"}
+  ]
+}
