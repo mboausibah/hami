@@ -118,6 +118,7 @@ from runs on real data.
 | Automatic checking | Pass | Consent screen on install. Off before consent. A bank is skipped with nothing sent. A candidate gets a badge without a click. A banner appears only for High. |
 | Idle snapshot | Pass | Sent after 10 s idle. Stored as a metadata HAR artifact with SHA-256. Kit match with Site A. No query strings, cookies or e-mails stored. |
 | Investigator mode | Pass | Refused on a bank. Auto-saved after 10 s idle. The downloaded `.har` contains none of the planted cookie or token values. The file's SHA-256 matches the reported hash, and the upload is verified server-side. |
+| False alarms on unseen legitimate pages | Pass | `python -m ml.eval_holdout` with model `m20261122-172703-full`: 50 legitimate homepages whose domains appear nowhere in training (17 job boards, 16 shops, 7 gig platforms, 10 micro-task/survey platforms, UAE-focused). 0 High and 0 Caution (all "no strong signals"). With 0/50 the 95% upper bound on the true false-alarm rate is about 6%, so this is a small sample, not proof. 8 more sites could not be judged (blocked the capture browser, timed out or too thin) and are excluded. 4 of the 50 are in the extension's skip list and would not be auto-checked anyway. |
 | Postgres via config | Pass | 68 backend tests and 29 e2e checks pass on PostgreSQL 16 with only `DATABASE_URL` changed. |
 
 ## Data sources and licenses
@@ -136,7 +137,7 @@ the team's own browsing sessions) stays in `data/private/`.
 ## Known limitations
 
 - No hosted API URL yet. The mobile app is not built.
-- The current model is the synthetic one, because the promotion rule (recall not lower and FPR not higher) keeps it. The model trained on real data has much higher recall but a slightly higher FPR, so promoting it is a reviewer decision (`make promote`).
+- The current model (`m20261122-172703-full`, trained on real + public + synthetic data) was promoted manually: the automatic rule (recall not lower and FPR not higher) would have kept the synthetic model, because held-out FPR rose from 0.003 to 0.022 while recall rose from 0.21 to 0.83. The override and its reason are recorded.
 - Kit matching needs at least one reviewer-confirmed site in the family. An entirely new kit behind a sign-in wall can reach Caution from delivered code but not High.
 - `STORAGE_URL=s3://…` is designed (`ArtifactStore`) but not implemented. There is no tool yet to move existing SQLite data into Postgres.
 - The Tranco-based skip list is for non-commercial use.

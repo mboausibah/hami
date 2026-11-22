@@ -10,7 +10,7 @@ in the legit_urls captures or in any review. Captures the homepage of the rest w
 instead of visiting the sites again.
 
 A false alarm is a legitimate page rated High risk (the tier that shows a full-page warning). Caution is
-reported separately. Pages that could not be captured (blocked, timeouts, insufficient content) are counted
+reported separately. Pages that could not be captured (blocked, timeouts, insufficient_evidence) are counted
 but excluded from the rate. Report: data/processed/holdout_report.json.
 """
 from __future__ import annotations
@@ -29,6 +29,7 @@ from app.urls import hostname, registrable_domain
 
 HERE = Path(__file__).parent
 LIST = HERE / "holdout_legit_urls.csv"
+INSUFFICIENT = "insufficient_evidence"
 WELL_KNOWN = HERE.parents[1] / "clients/extension/src/data/well_known.json"
 
 
@@ -77,22 +78,31 @@ def main(argv: list[str] | None = None) -> int:
             p = reanalyze_stored(s["sid"])
             results.append((cat.get(s["submitted_url"], "?"), s["submitted_url"], p))
     else:
+        # Reuse earlier captures of this hold-out set (re-scored with the current model); visit only new sites.
+        with db() as conn:
+            stored = {r["submitted_url"]: r["sid"] for r in conn.execute(
+                "SELECT MAX(scan_id) AS sid, submitted_url FROM scans WHERE batch='holdout_legit' GROUP BY submitted_url")}
         ok = 0
         for r in todo:
             if ok >= args.target:
                 break
+            if r["url"] in stored:
+                p = reanalyze_stored(stored[r["url"]])
+                results.append((r["category"], r["url"], p))
+                ok += p["capture_status"] == "ok" and p["tier"] != INSUFFICIENT
+                continue
             try:
                 p = submit_scan(r["url"], "manual", batch="holdout_legit", force=True)
             except ScanError as e:
                 print(f"  refused {r['url']}: {e}")
                 continue
             results.append((r["category"], r["url"], p))
-            good = p["capture_status"] == "ok" and p["tier"] != "insufficient"
+            good = p["capture_status"] == "ok" and p["tier"] != INSUFFICIENT
             ok += good
             print(f"  [{ok:>2}] {r['category']:<9} {p['tier'] or '-':<18} {p['capture_status']:<10} {r['url']}")
             time.sleep(args.gap)
 
-    evaluated = [(c, u, p) for c, u, p in results if p["capture_status"] == "ok" and p["tier"] != "insufficient"]
+    evaluated = [(c, u, p) for c, u, p in results if p["capture_status"] == "ok" and p["tier"] != INSUFFICIENT]
     failed = [(c, u, p["capture_status"], p["tier"]) for c, u, p in results if (c, u, p) not in evaluated]
     tiers = Counter(p["tier"] for _, _, p in evaluated)
     n = len(evaluated)
