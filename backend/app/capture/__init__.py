@@ -43,7 +43,12 @@ FIND_TARGET_JS = r"""
   const unsafe = new RegExp(unsafeWords, 'i');
   const patterns = kind === 'language'
     ? [/^\s*(english|eng|en)\s*$/i, /^\s*(العربية|عربي|arabic|ar)\s*$/i, /\b(language|lang)\b|اللغة/i]
+    : kind === 'dismiss'
+    ? [/^\s*(more on that later|later|maybe later|not now|no,? thanks|close|skip|cancel|×|✕|x|لاحقا|لاحقًا|ليس الآن|إغلاق|اغلاق|تخطي)\s*$/i]
     : [/country|countries|region|select (your )?location|الدولة|البلد|الدول|المنطقة|اختر الدولة/i];
+  // Icon-only controls (globe / flag buttons): matched by class, id, aria-label, title or image alt/src.
+  const attrPattern = kind === 'language' ? /(^|[-_\s])(lang|language|locale|i18n|globe)([-_\s]|$)/i
+    : kind === 'country' ? /(^|[-_\s])(country|countries|flag|region|area-code|nation)([-_\s]|$)/i : null;
   const visible = el => {
     const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
@@ -85,7 +90,34 @@ FIND_TARGET_JS = r"""
       return txt.slice(0, 40);
     }
   }
+  if (attrPattern) {
+    const attrsOf = el => [el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className,
+      el.id, el.getAttribute('aria-label'), el.getAttribute('title'),
+      ...Array.from(el.querySelectorAll('img')).slice(0, 2).map(i => (i.getAttribute('alt') || '') + ' ' + (i.getAttribute('src') || ''))
+    ].filter(Boolean).join(' ');
+    const cands = Array.from(document.querySelectorAll('button, [role=button], a, div, span, li, uni-view, img'));
+    for (const el of cands) {
+      const a = attrsOf(el);
+      if (!a || !attrPattern.test(a.replace(/[A-Z]/g, m => '-' + m.toLowerCase()))) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 120 || r.height > 80 || !visible(el) || !safe(el)) continue;  // small icon controls only
+      document.querySelectorAll('[data-hami-target]').forEach(x => x.removeAttribute('data-hami-target'));
+      el.setAttribute('data-hami-target', '1');
+      return ('[' + (el.getAttribute('aria-label') || el.tagName.toLowerCase()) + ']').slice(0, 40);
+    }
+  }
   return null;
+}
+"""
+
+# Canvas-rendered apps (Flutter web): turn on the framework's accessibility tree, as a screen reader does,
+# so the page's text exists in the DOM. A non-submitting action.
+ENABLE_A11Y_JS = r"""
+() => {
+  const ph = document.querySelector('flt-semantics-placeholder, [aria-label="Enable accessibility"]');
+  if (!ph) return false;
+  ph.click();
+  return true;
 }
 """
 
@@ -297,7 +329,17 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                     except PWError:
                         cur_lang = "en"
                     step = 1
-                    for kind in ("language", "country"):
+                    try:
+                        enabled = await page.evaluate(ENABLE_A11Y_JS)
+                    except PWError:
+                        enabled = False
+                    if enabled:
+                        log("action", kind="enable_accessibility_tree", target_text="canvas-rendered app")
+                        await page.wait_for_timeout(min(1500, budget.ms(1.5)))
+                        await snapshot(step, "accessibility_tree")
+                        step += 1
+                    names = {"language": "language_switch", "country": "country_selector", "dismiss": "dismiss_popup"}
+                    for kind in ("dismiss", "language", "country"):
                         if budget.left() < 3:
                             log("action_skipped", kind=kind, reason="time budget")
                             continue
@@ -316,7 +358,7 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                             except PWError:
                                 pass
                             await page.wait_for_timeout(min(900, budget.ms(0.9)))
-                            await snapshot(step, f"{kind}_switch" if kind == "language" else "country_selector")
+                            await snapshot(step, names[kind])
                             step += 1
                         except PWError as e:
                             log("action_failed", kind=kind, error=str(e).splitlines()[0][:200])

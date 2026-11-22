@@ -51,6 +51,10 @@ def visible_lines(soup: BeautifulSoup) -> list[str]:
                 if ph:
                     parts.append(f"\n{ph}\n")
                 continue
+            label = child.get("aria-label")
+            if label and name != "flt-semantics-placeholder" and not child.get_text(strip=True):
+                # Accessibility labels carry the text of canvas-rendered apps and icon-only controls.
+                parts.append(f"\n{label}\n")
             if name in BLOCK_SEP_TAGS:
                 parts.append("\n")
             walk(child)

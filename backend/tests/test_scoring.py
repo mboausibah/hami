@@ -56,3 +56,9 @@ def test_clues_capped_at_three():
     d = decide(an(["deposit_to_unlock", "advance_fee"], ["vip_table", "invitation_code"], identity="mismatch"),
                0.9, T, ReviewedContext())
     assert len(d.clue_types) == 3 and d.clue_types[0] == "identity_mismatch"
+
+
+def test_classifier_score_ignored_on_thin_or_signin_pages():
+    d = decide(an(thin_content=True), 0.9, T, ReviewedContext())
+    assert d.tier == "insufficient_evidence" and "classifier_above_caution_threshold" not in d.rules_fired
+    assert decide(an(signin_wall=True), 0.6, T, ReviewedContext()).tier == "insufficient_evidence"

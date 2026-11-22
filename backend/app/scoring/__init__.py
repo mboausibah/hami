@@ -51,11 +51,13 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
     behaviors = [b for b in an.behaviors if b in FRAUD_BEHAVIORS]
     signals = list(an.signals)
     reviewed_legit = ctx.exact_host_label == "legitimate"
+    flags = an.flags or {}
+    # A classifier score on a near-empty page, a sign-in wall or a block page says nothing about the site.
+    content_ok = not any(flags.get(k) for k in ("load_failed", "thin_content", "signin_wall", "cloaking_suspected"))
     model_ok = score is not None and not reviewed_legit
     agree = model_ok and score >= agree_t
-    above_caution = model_ok and score >= caution_t
+    above_caution = model_ok and content_ok and score >= caution_t
     any_fraud = bool(behaviors) or bool(signals)
-    flags = an.flags or {}
     not_checked = ["behind_signin", "payment_pages", "operator"]
     if score is None:
         not_checked.append("no_model")
