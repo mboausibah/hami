@@ -127,7 +127,9 @@ def main() -> int:
             page.wait_for_selector(".hami-card", timeout=90000)
             text = page.inner_text("#result")
             check("popup: Site A shows High risk with clues", "High risk" in text and "why" in text.lower(), text[:80].replace("\n", " "))
-            check("popup: what to do + live label", "what to do now" in text.lower() and "Live check" in text)
+            # "Stored capture" when the automatic check above already scanned Site A moments ago (served from cache).
+            check("popup: what to do + live/stored label", "what to do now" in text.lower()
+                  and ("Live check" in text or "Stored capture" in text))
             check("clue quotes the amount from the cited sentence", "AED 500" in text, "")
             page.screenshot(path=str(shots / "popup_en.png"), full_page=True)
             # Watch toggle.
