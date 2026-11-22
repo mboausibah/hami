@@ -167,15 +167,18 @@ def analyze(inp: AnalyzerInput) -> Analysis:
     norm_lines = [(s, l, normalize_arabic(l)) for s, l in lines_by_step]
     norm_all = "\n".join(n for _, _, n in norm_lines)
 
-    def first_match(rx: re.Pattern) -> tuple[int, str] | None:
+    def first_match(rx: re.Pattern, negatable: bool = True) -> tuple[int, str] | None:
         for s, orig, norm in norm_lines:
-            if rx.search(norm):
+            for m in rx.finditer(norm):
+                if negatable and P.NEGATION.search(norm[max(0, m.start() - P.NEGATION_WINDOW):m.start()]):
+                    continue
                 return s, orig
         return None
 
     def window_match(rx_a: re.Pattern, rx_b: re.Pattern, width: int = 2) -> tuple[int, str] | None:
         for i, (s, orig, norm) in enumerate(norm_lines):
-            if not rx_a.search(norm):
+            m = rx_a.search(norm)
+            if not m or P.NEGATION.search(norm[max(0, m.start() - P.NEGATION_WINDOW):m.start()]):
                 continue
             lo, hi = max(0, i - width), min(len(norm_lines), i + width + 1)
             if any(rx_b.search(norm_lines[j][2]) for j in range(lo, hi)):

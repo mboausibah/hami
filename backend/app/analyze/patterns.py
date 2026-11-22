@@ -89,6 +89,10 @@ BLOCK_PAGE = R(
     r"\b(access denied|attention required|just a moment|verify you are human|checking your browser|"
     r"not available in your (region|country)|request blocked|forbidden|captcha)\b"
 )
+# Negation cue shortly before a behavior match ("we never ask you to pay to receive tasks").
+NEGATION = R(r"\b(never|not|no|don'?t|doesn'?t|won'?t|will not|without|free of charge|nor)\b|لا |لن |ابدا|ليس |دون |بدون |مجانا")
+NEGATION_WINDOW = 32
+
 SIGNIN = R(r"\b(sign in|log in|login|password|username)\b|تسجيل الدخول|كلمه المرور|اسم المستخدم")
 
 # --- form fields --------------------------------------------------------------------------------

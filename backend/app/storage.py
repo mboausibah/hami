@@ -74,6 +74,7 @@ def verify_artifact(rel_path: str, expected_sha: str) -> bool:
         return False
 
 
-def artifact_url(artifact_id: int) -> str:
-    """Path relative to the API base URL; clients prefix their configured server URL."""
-    return f"/artifacts/{artifact_id}"
+def artifact_url(artifact_id: int, key: str | None = None) -> str:
+    """Path relative to the API base URL; clients prefix their configured server URL. The scan's
+    capability key is part of the URL so screenshots cannot be enumerated."""
+    return f"/artifacts/{artifact_id}" + (f"?k={key}" if key else "")

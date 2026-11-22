@@ -5,6 +5,7 @@ capture can be re-analyzed later (e.g. when a scam site has gone offline)."""
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 import threading
 import time
@@ -25,7 +26,6 @@ from app.urls import UnsafeTarget, check_target, ensure_scheme, hostname, normal
 
 SOURCE_TYPES = {"search", "maps", "sms", "whatsapp", "manual", "extension", "discovery", "import"}
 _capture_sem = threading.BoundedSemaphore(max(1, settings.capture_concurrency))
-DYNAMIC_COMMON_MIN_SITES = 8
 
 
 class ScanError(ValueError):
@@ -66,8 +66,9 @@ def submit_scan(url: str, source_type: str = "manual", listing_name: str | None 
     with db() as conn:
         scan_id = conn.execute(
             "INSERT INTO scans (submitted_url, normalized_url, host, source_type, listing_name, lang, batch, "
-            "parent_scan_id, submitted_at, status) VALUES (?,?,?,?,?,?,?,?,?, 'capturing')",
-            (clean_url, norm, host, source_type, listing_name, lang, batch, parent_scan_id, utcnow()),
+            "parent_scan_id, submitted_at, status, access_key) VALUES (?,?,?,?,?,?,?,?,?, 'capturing', ?)",
+            (clean_url, norm, host, source_type, listing_name, lang, batch, parent_scan_id, utcnow(),
+             secrets.token_urlsafe(16)),
         ).lastrowid
     t0 = time.monotonic()
     with _capture_sem:
@@ -103,10 +104,10 @@ def reanalyze_stored(source_scan_id: int, listing_name: str | None = None, sourc
         origin = src["stored_from_scan_id"] or src["scan_id"]
         scan_id = conn.execute(
             "INSERT INTO scans (submitted_url, normalized_url, host, source_type, listing_name, lang, submitted_at, "
-            "status, capture_mode, capture_status, captured_at, final_url, stored_from_scan_id) "
+            "status, capture_mode, capture_status, captured_at, final_url, stored_from_scan_id, access_key) "
             "SELECT submitted_url, normalized_url, host, ?, ?, ?, ?, 'analyzing', 'stored', capture_status, captured_at, "
-            "final_url, ? FROM scans WHERE scan_id=?",
-            (source_type, listing_name, lang, utcnow(), origin, origin)).lastrowid
+            "final_url, ?, ? FROM scans WHERE scan_id=?",
+            (source_type, listing_name, lang, utcnow(), origin, secrets.token_urlsafe(16), origin)).lastrowid
         cap_status = src["capture_status"] or "ok"
     analyze_and_score(scan_id, source_scan_id=origin, listing_name=listing_name, http_status=None,
                       capture_status=cap_status, stored=True, t0=time.monotonic())
@@ -176,15 +177,6 @@ def load_bundle(conn: sqlite3.Connection, scan_id: int) -> tuple[list[tuple[int,
     return steps, har, shots, har_id, htmls
 
 
-def dynamic_common_hosts(conn: sqlite3.Connection, min_sites: int = DYNAMIC_COMMON_MIN_SITES) -> set[str]:
-    """Hosts referenced by many unrelated sites behave like common services (ignored for linking)."""
-    rows = conn.execute(
-        "SELECT o.host_ref FROM observations o JOIN scans s ON s.scan_id=o.scan_id "
-        "WHERE o.indicator_type IN ('asset_host','host_reference','registration_destination') AND o.host_ref IS NOT NULL "
-        "GROUP BY o.host_ref HAVING COUNT(DISTINCT s.host) >= ?", (min_sites,)).fetchall()
-    return {r[0] for r in rows}
-
-
 def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | None, http_status: int | None,
                       capture_status: str, stored: bool, t0: float, live_failure: str | None = None) -> None:
     with db() as conn:
@@ -202,6 +194,8 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
             score = float(model.predict_proba([an.model_text], [an.features])[0])
             phrases = model.explain(an.model_text, an.features, k=5)
             thresholds = {k: model.settings[k] for k in ("threshold_agree", "threshold_caution")}
+
+        from app.linking import dynamic_common_hosts
 
         common = dynamic_common_hosts(conn)
         ctx = ReviewedContext(
@@ -232,7 +226,6 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
                 "excerpt_lang": (ob["lang"] if ob else None),
                 "obs_id": ob["obs_id"] if ob else None,
                 "screenshot_artifact_id": shot_id,
-                "screenshot_url": artifact_url(shot_id) if shot_id else None,
             })
         not_checked = list(decision.not_checked)
         with tx(conn):
@@ -248,12 +241,11 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
     _post_scan_hooks(scan_id)
 
 
-POST_SCAN_HOOKS: list = []
-
-
 def _post_scan_hooks(scan_id: int) -> None:
-    for hook in POST_SCAN_HOOKS:
-        hook(scan_id)
+    """Related-site linking (candidate links + pending alerts for watched cases)."""
+    from app.linking import process_scan
+
+    process_scan(scan_id)
 
 
 def _analysis_record(an: Analysis, decision: Any, score: float | None) -> dict[str, Any]:
@@ -326,11 +318,11 @@ def get_scan_payload(scan_id: int, include_internal: bool = False) -> dict[str, 
         "submitted_at": s["submitted_at"], "captured_at": s["captured_at"], "completed_at": s["completed_at"],
         "duration_ms": s["duration_ms"], "page_lang": s["page_lang"],
         "capture_mode": s["capture_mode"] or "live", "capture_status": s["capture_status"],
-        "stored_from_scan_id": s["stored_from_scan_id"], "cached": False,
+        "stored_from_scan_id": s["stored_from_scan_id"], "cached": False, "access_key": s["access_key"],
         "artifacts": [
             {"artifact_id": r["artifact_id"], "kind": r["kind"], "sha256": r["sha256"], "action_step": r["action_step"],
              "action": r["action_name"], "captured_at": r["captured_at"], "size_bytes": r["size_bytes"],
-             "url": artifact_url(r["artifact_id"]) if r["kind"] == "screenshot" else None}
+             "url": artifact_url(r["artifact_id"], s["access_key"]) if r["kind"] == "screenshot" else None}
             for r in arts
         ],
         "review": ({"label": review["label"], "behavior_tags": review["behavior_tags"], "reviewed_at": review["created_at"]}
@@ -349,7 +341,8 @@ def get_scan_payload(scan_id: int, include_internal: bool = False) -> dict[str, 
         "tier_label": T.TIER_LABEL[tier],
         "headline": hl,
         "score": round(a["score"], 4) if a["score"] is not None else None,
-        "clues": extra.get("clues", []),
+        "clues": [dict(c, screenshot_url=artifact_url(c["screenshot_artifact_id"], s["access_key"])
+                       if c.get("screenshot_artifact_id") else None) for c in extra.get("clues", [])],
         "what_to_do": T.WHAT_TO_DO[tier],
         "not_checked": {"en": [T.NOT_CHECKED[k]["en"] for k in nc if k in T.NOT_CHECKED],
                         "ar": [T.NOT_CHECKED[k]["ar"] for k in nc if k in T.NOT_CHECKED]},

@@ -12,7 +12,7 @@ EXPECTED_TABLES = {
 
 def test_migrations_create_all_tables(fresh_db):
     applied = dbmod.migrate(fresh_db)
-    assert applied == ["001_init"]
+    assert applied[0] == "001_init" and applied == sorted(applied)
     assert dbmod.migrate(fresh_db) == []  # idempotent
     conn = sqlite3.connect(fresh_db)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
