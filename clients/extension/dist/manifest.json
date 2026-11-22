@@ -12,12 +12,10 @@
   },
   "background": { "service_worker": "background.js", "type": "module" },
   "options_page": "options/options.html",
-  "permissions": ["activeTab", "contextMenus", "storage", "alarms", "scripting"],
+  "permissions": ["activeTab", "contextMenus", "storage", "alarms", "scripting", "webRequest"],
   "host_permissions": [
-    "http://localhost/*",
-    "https://www.google.com/search*",
-    "https://www.google.ae/search*",
-    "https://www.google.com/maps*"
+    "http://*/*",
+    "https://*/*"
   ],
   "content_scripts": [
     {

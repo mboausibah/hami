@@ -83,6 +83,7 @@ class Settings:
     rate_scans_per_min: int = field(default_factory=lambda: _env_int("RATE_SCANS_PER_MIN", 12))
     rate_lookup_per_min: int = field(default_factory=lambda: _env_int("RATE_LOOKUP_PER_MIN", 60))
     rate_default_per_min: int = field(default_factory=lambda: _env_int("RATE_DEFAULT_PER_MIN", 120))
+    rate_snapshots_per_min: int = field(default_factory=lambda: _env_int("RATE_SNAPSHOTS_PER_MIN", 6))
     rate_ip_multiplier: int = field(default_factory=lambda: _env_int("RATE_IP_MULTIPLIER", 3))
 
     cors_extra_origins: list[str] = field(default_factory=lambda: _env_list("CORS_EXTRA_ORIGINS", "http://localhost:8081,http://localhost:19006"))

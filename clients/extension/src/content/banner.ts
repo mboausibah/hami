@@ -5,7 +5,7 @@
  *  3. candidate pages are checked automatically (only after the user's consent): the toolbar badge shows the
  *     result; the full-page banner appears only for High risk. */
 import { TIERS, t, type Lang, type ScanResult } from "@hami/shared";
-import { send, type ClassifyData } from "../lib/messages";
+import { send, type ClassifyData, type SnapshotResource } from "../lib/messages";
 import { autoCheckActive, getSettings } from "../lib/settings";
 import { WIDGET_CSS, dirFor } from "./overlay";
 
@@ -95,6 +95,48 @@ export function resourceNames(): string[] {
   return [...names].slice(0, 400);
 }
 
+const IDLE_MS = 10_000;
+
+/** Resources the page loaded (PerformanceResourceTiming); query strings are stripped in the background. */
+function pageResources(): SnapshotResource[] {
+  const out: SnapshotResource[] = [];
+  const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  const statusOf = (e: PerformanceEntry): number | null => (e as unknown as { responseStatus?: number }).responseStatus || null;
+  if (nav) out.push({ url: location.href, type: "main_frame", status: statusOf(nav), duration_ms: Math.round(nav.duration),
+                      size: nav.transferSize || null });
+  for (const e of performance.getEntriesByType("resource") as PerformanceResourceTiming[]) {
+    out.push({ url: e.name, type: e.initiatorType || "other", status: statusOf(e), duration_ms: Math.round(e.duration),
+               size: e.transferSize || e.encodedBodySize || null });
+  }
+  return out.slice(0, 600);
+}
+
+/** After 10 s without mouse, keyboard, scroll or touch activity, send one snapshot for this page load.
+ * (Measured here: chrome.idle's minimum is 15 s.) */
+function watchIdle(lang: Lang): void {
+  let timer = 0;
+  let sent = false;
+  const events = ["mousemove", "mousedown", "keydown", "scroll", "wheel", "touchstart"];
+  const reset = (): void => {
+    clearTimeout(timer);
+    timer = window.setTimeout(fire, IDLE_MS);
+  };
+  const fire = (): void => {
+    if (sent) return;
+    if (document.visibilityState !== "visible") {
+      reset();
+      return;
+    }
+    sent = true;
+    events.forEach((ev) => window.removeEventListener(ev, reset, true));
+    const text = (document.body?.innerText ?? "").slice(0, 20000);
+    void send({ type: "snapshot", payload: { page_url: location.href, resources: pageResources(), visible_text: text, lang } })
+      .then((r) => document.dispatchEvent(new CustomEvent("hami-snapshot", { detail: { ok: r.ok } })));
+  };
+  events.forEach((ev) => window.addEventListener(ev, reset, { capture: true, passive: true }));
+  reset();
+}
+
 async function main(): Promise<void> {
   const s = await getSettings();
   const lang = s.lang;
@@ -114,6 +156,7 @@ async function main(): Promise<void> {
       res.data.clues[0]?.text[lang] ?? "", style.color, res.data);
   }
   document.dispatchEvent(new CustomEvent("hami-candidate", { detail: { checked: res.ok } }));
+  if (s.idleSnapshots) watchIdle(lang);
 }
 
 void main();

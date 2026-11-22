@@ -31,7 +31,8 @@ export type Request =
   | { type: "openResult"; scanId: number; key: string }
   | { type: "classify"; url: string; resourceNames?: string[] }
   | { type: "autoCheck"; url: string; reasons: string[] }
-  | { type: "consent"; agree: boolean };
+  | { type: "consent"; agree: boolean }
+  | { type: "snapshot"; payload: SnapshotPayload };
 
 export type Response<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 

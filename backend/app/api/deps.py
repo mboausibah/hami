@@ -75,8 +75,8 @@ def client_ip(request: Request) -> str:
 
 
 def rate_limit(bucket: str):  # noqa: ANN201
-    per_min = {"scans": lambda: settings.rate_scans_per_min, "lookup": lambda: settings.rate_lookup_per_min}.get(
-        bucket, lambda: settings.rate_default_per_min)
+    per_min = {"scans": lambda: settings.rate_scans_per_min, "lookup": lambda: settings.rate_lookup_per_min,
+               "snapshots": lambda: settings.rate_snapshots_per_min}.get(bucket, lambda: settings.rate_default_per_min)
 
     def dep(request: Request, x_device_id: str | None = Header(default=None)) -> None:
         limit = per_min()

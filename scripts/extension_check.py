@@ -195,6 +195,25 @@ def main() -> int:
             check("banner needed no server call from the page", api_hits == [], str(api_hits[:2]))
             page.screenshot(path=str(shots / "banner.png"))
 
+            # PART 3: idle snapshot on a candidate page (Site D, a login wall running Site A's bundles).
+            d_page = ctx.new_page()
+            d_page.goto(site("site-d"))
+            snap_ok = d_page.evaluate("""() => new Promise(r => { document.addEventListener('hami-snapshot', e => r(e.detail.ok));
+                                         setTimeout(() => r(null), 40000); })""")
+            check("idle snapshot sent after 10 s without activity", snap_ok is True, str(snap_ok))
+            snaps = [x for x in c.get("/scans", params={"limit": 100}).json()["scans"]
+                     if x["host"] == "site-d.localhost" and x["batch"] == "snapshot"]
+            if snaps:
+                internal = c.get(f"/scans/{snaps[0]['scan_id']}/internal").json()
+                har_arts = [a for a in internal["artifacts"] if a["kind"] == "har" and a["action"] == "idle_snapshot"]
+                check("snapshot stored as a HAR-format artifact (metadata) with SHA-256", bool(har_arts) and len(har_arts[0]["sha256"]) == 64)
+                check("snapshot finds the kit match with confirmed Site A", internal["tier"] == "high_risk" and
+                      any(cl["type"] == "kit_match" for cl in internal["clues"]),
+                      next((cl["text"]["en"] for cl in internal["clues"] if cl["type"] == "kit_match"), str(internal["rules_fired"])))
+            else:
+                check("snapshot stored as a HAR-format artifact (metadata) with SHA-256", False, "no snapshot scan")
+            d_page.close()
+
             # Search shields on an original Google-like fixture (request interception; Google is not contacted).
             c.post("/scans", json={"url": site("site-c"), "source_type": "manual"})  # make Site C known to the server
             html = SEARCH_FIXTURE.format(a=site("site-a"), c=site("site-c"))

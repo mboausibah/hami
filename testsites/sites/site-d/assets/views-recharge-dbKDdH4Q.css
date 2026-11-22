@@ -1,0 +1,44 @@
+.recharge-panel{display:grid;gap:8px;padding:16px;border-radius:12px;background:#fff7ef}
+.recharge-panel .preset{border:1px solid #ffb36b;border-radius:8px;padding:8px 12px;font-weight:700}
+.recharge-panel .preset.active{background:#ff7a00;color:#fff}.vip-badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#2b1d0e;color:#ffd27a}
+.withdraw-rule{font-size:12px;color:#7a5a3a}.task-locked{opacity:.5;filter:grayscale(1)}
+.recharge-panel .row-0{margin:0px 0;padding:4px;border-left:0px solid #ff7a00}
+.recharge-panel .row-1{margin:1px 0;padding:5px;border-left:1px solid #ff7a00}
+.recharge-panel .row-2{margin:2px 0;padding:6px;border-left:2px solid #ff7a00}
+.recharge-panel .row-3{margin:3px 0;padding:7px;border-left:0px solid #ff7a00}
+.recharge-panel .row-4{margin:4px 0;padding:8px;border-left:1px solid #ff7a00}
+.recharge-panel .row-5{margin:5px 0;padding:9px;border-left:2px solid #ff7a00}
+.recharge-panel .row-6{margin:6px 0;padding:10px;border-left:0px solid #ff7a00}
+.recharge-panel .row-7{margin:7px 0;padding:4px;border-left:1px solid #ff7a00}
+.recharge-panel .row-8{margin:8px 0;padding:5px;border-left:2px solid #ff7a00}
+.recharge-panel .row-9{margin:9px 0;padding:6px;border-left:0px solid #ff7a00}
+.recharge-panel .row-10{margin:10px 0;padding:7px;border-left:1px solid #ff7a00}
+.recharge-panel .row-11{margin:11px 0;padding:8px;border-left:2px solid #ff7a00}
+.recharge-panel .row-12{margin:12px 0;padding:9px;border-left:0px solid #ff7a00}
+.recharge-panel .row-13{margin:13px 0;padding:10px;border-left:1px solid #ff7a00}
+.recharge-panel .row-14{margin:14px 0;padding:4px;border-left:2px solid #ff7a00}
+.recharge-panel .row-15{margin:15px 0;padding:5px;border-left:0px solid #ff7a00}
+.recharge-panel .row-16{margin:16px 0;padding:6px;border-left:1px solid #ff7a00}
+.recharge-panel .row-17{margin:17px 0;padding:7px;border-left:2px solid #ff7a00}
+.recharge-panel .row-18{margin:18px 0;padding:8px;border-left:0px solid #ff7a00}
+.recharge-panel .row-19{margin:19px 0;padding:9px;border-left:1px solid #ff7a00}
+.recharge-panel .row-20{margin:20px 0;padding:10px;border-left:2px solid #ff7a00}
+.recharge-panel .row-21{margin:21px 0;padding:4px;border-left:0px solid #ff7a00}
+.recharge-panel .row-22{margin:22px 0;padding:5px;border-left:1px solid #ff7a00}
+.recharge-panel .row-23{margin:23px 0;padding:6px;border-left:2px solid #ff7a00}
+.recharge-panel .row-24{margin:24px 0;padding:7px;border-left:0px solid #ff7a00}
+.recharge-panel .row-25{margin:25px 0;padding:8px;border-left:1px solid #ff7a00}
+.recharge-panel .row-26{margin:26px 0;padding:9px;border-left:2px solid #ff7a00}
+.recharge-panel .row-27{margin:27px 0;padding:10px;border-left:0px solid #ff7a00}
+.recharge-panel .row-28{margin:28px 0;padding:4px;border-left:1px solid #ff7a00}
+.recharge-panel .row-29{margin:29px 0;padding:5px;border-left:2px solid #ff7a00}
+.recharge-panel .row-30{margin:30px 0;padding:6px;border-left:0px solid #ff7a00}
+.recharge-panel .row-31{margin:31px 0;padding:7px;border-left:1px solid #ff7a00}
+.recharge-panel .row-32{margin:32px 0;padding:8px;border-left:2px solid #ff7a00}
+.recharge-panel .row-33{margin:33px 0;padding:9px;border-left:0px solid #ff7a00}
+.recharge-panel .row-34{margin:34px 0;padding:10px;border-left:1px solid #ff7a00}
+.recharge-panel .row-35{margin:35px 0;padding:4px;border-left:2px solid #ff7a00}
+.recharge-panel .row-36{margin:36px 0;padding:5px;border-left:0px solid #ff7a00}
+.recharge-panel .row-37{margin:37px 0;padding:6px;border-left:1px solid #ff7a00}
+.recharge-panel .row-38{margin:38px 0;padding:7px;border-left:2px solid #ff7a00}
+.recharge-panel .row-39{margin:39px 0;padding:8px;border-left:0px solid #ff7a00}

@@ -148,6 +148,43 @@ def high_risk_hosts() -> dict:
     return {"version": version, "count": len(names), "hosts": names, "domains": domains}
 
 
+class SnapshotResource(BaseModel):
+    url: str = Field(..., max_length=2048)
+    type: str = Field("other", max_length=24)
+    status: int | None = None
+    duration_ms: float | None = None
+    size: int | None = None
+
+
+class SnapshotIn(BaseModel):
+    page_url: str = Field(..., max_length=2048)
+    resources: list[SnapshotResource] = Field(default_factory=list, max_length=1200)
+    visible_text: str = Field("", max_length=40000)
+    lang: str = Field("en", max_length=5)
+    device_id: str = Field(..., max_length=64)
+    scan_id: int | None = None
+    k: str | None = None
+
+
+@router.post("/snapshots", dependencies=[Depends(rate_limit("snapshots"))])
+async def create_snapshot(body: SnapshotIn) -> dict:
+    """Idle snapshot of a candidate page from the extension (metadata only; see app/snapshots.py)."""
+    from app.snapshots import SnapshotError, ingest
+
+    valid_device_id(body.device_id)
+    linked = None
+    if body.scan_id is not None:
+        with db() as conn:
+            row = conn.execute("SELECT access_key FROM scans WHERE scan_id=?", (body.scan_id,)).fetchone()
+        if row is None or not body.k or body.k != row["access_key"]:
+            raise HTTPException(403, "scan key required to link a snapshot")
+        linked = body.scan_id
+    try:
+        return await run_in_threadpool(ingest, body.model_dump(), linked)
+    except SnapshotError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @router.get("/indicators/local-lists", dependencies=[Depends(rate_limit("default"))])
 def local_lists() -> dict:
     """Everything the extension needs to decide on the device, without a server call per page:

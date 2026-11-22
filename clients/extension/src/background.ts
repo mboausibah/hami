@@ -1,8 +1,9 @@
 /** Background service worker: context menu, API calls on behalf of pages/content scripts, 30-minute sync of
  * the on-device lists (reviewer-confirmed hosts/domains, recently certificate-logged domains, kit file names),
  * on-device pre-filter + automatic checking (after consent), per-tab result badge, unread-alerts badge. */
-import { HamiApi, HamiApiError, SYNC_INTERVAL_MIN, hostOf, t, type HamiAlert, type ScanResult, type Tier } from "@hami/shared";
-import type { AlertsData, Request, Response } from "./lib/messages";
+import { HamiApi, HamiApiError, SYNC_INTERVAL_MIN, TIER_RANK, hostOf, redactText, stripUrl, t, type HamiAlert, type ScanResult,
+         type Tier } from "@hami/shared";
+import type { AlertsData, Request, Response, SnapshotResource } from "./lib/messages";
 import { classify, type Lists } from "./lib/prefilter";
 import { autoCheckActive, getDeviceId, getLists, getSettings, getWatchMap, saveSettings, setWatchMap } from "./lib/settings";
 
@@ -16,6 +17,24 @@ const BADGE: Record<Tier, { text: string; color: string } | null> = {
   no_strong_signals: { text: "✓", color: "#1a7f37" },
   insufficient_evidence: null,
 };
+
+// ---- idle-snapshot support: what each tab loaded, in memory only, recorded only while automatic checking is on.
+const MAX_TAB_RESOURCES = 600;
+const tabRequests = new Map<number, Map<string, SnapshotResource>>();
+let recording = false;
+void getSettings().then((s) => { recording = autoCheckActive(s) && s.idleSnapshots; });
+
+function recordRequest(d: { tabId: number; url: string; type: string }, status: number | null): void {
+  if (!recording || d.tabId < 0) return;
+  const url = stripUrl(d.url);
+  if (!url) return;
+  const m = tabRequests.get(d.tabId) ?? new Map<string, SnapshotResource>();
+  if (m.size >= MAX_TAB_RESOURCES && !m.has(url)) return;
+  m.set(url, { url, type: d.type, status, duration_ms: null, size: null });
+  tabRequests.set(d.tabId, m);
+}
+chrome.webRequest.onCompleted.addListener((d) => recordRequest(d, d.statusCode), { urls: ["<all_urls>"] });
+chrome.webRequest.onErrorOccurred.addListener((d) => recordRequest(d, null), { urls: ["<all_urls>"] });
 
 async function api(): Promise<HamiApi> {
   const [s, device] = await Promise.all([getSettings(), getDeviceId()]);
@@ -138,6 +157,38 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
       await showTabBadge(tabId, r.tier);
       return { ok: true, data: r };
     }
+    case "snapshot": {
+      // One idle snapshot per page load, candidates only, with consent. Sanitized again here before sending.
+      if (!autoCheckActive(s) || !s.idleSnapshots) return { ok: false, error: "snapshots are off" };
+      const page = stripUrl(req.payload.page_url);
+      if (!page || classify(page, await getLists()).skip) return { ok: false, error: "not a candidate" };
+      const onceKey = `snap:${tabId}:${page}`;
+      if ((await chrome.storage.session.get(onceKey))[onceKey]) return { ok: false, error: "already sent for this page load" };
+      await chrome.storage.session.set({ [onceKey]: Date.now() });
+      const merged = new Map<string, SnapshotResource>();
+      for (const r of req.payload.resources) {
+        const u = stripUrl(r.url);
+        if (u) merged.set(u, { ...r, url: u });
+      }
+      for (const [u, r] of tabRequests.get(tabId ?? -1) ?? []) {
+        const prev = merged.get(u);
+        merged.set(u, prev ? { ...prev, status: r.status ?? prev.status, type: prev.type || r.type } : r);
+      }
+      const tab = (await chrome.storage.session.get(`tab:${tabId}`))[`tab:${tabId}`] as
+        { scanId: number; key: string; url: string } | undefined;
+      const link = tab && stripUrl(tab.url) === page ? { scan_id: tab.scanId, k: tab.key } : {};
+      const r = await (await api()).snapshot({
+        page_url: page, resources: [...merged.values()].slice(0, MAX_TAB_RESOURCES),
+        visible_text: redactText(req.payload.visible_text).slice(0, 20000), lang: req.payload.lang, ...link,
+      });
+      const prevKey = `result:${tab?.url ?? page}`;
+      const prev = (await chrome.storage.session.get(prevKey))[prevKey] as { result: ScanResult } | undefined;
+      if (r.tier && (!prev?.result.tier || TIER_RANK[r.tier] < TIER_RANK[prev.result.tier])) {
+        await showTabBadge(tabId, r.tier);
+        await rememberResult(r, tab?.url ?? page);
+      }
+      return { ok: true, data: r };
+    }
     case "consent": {
       const next = await saveSettings(req.agree ? { autoCheck: true, consentAt: new Date().toISOString() }
                                                 : { autoCheck: false, consentAt: null });
@@ -212,10 +263,15 @@ chrome.alarms.onAlarm.addListener((a) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === "loading") void showTabBadge(tabId, null);
+  if (info.status === "loading") {
+    void showTabBadge(tabId, null);
+    tabRequests.delete(tabId);
+  }
 });
+chrome.tabs.onRemoved.addListener((tabId) => tabRequests.delete(tabId));
 
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync") void getSettings().then((s) => { recording = autoCheckActive(s) && s.idleSnapshots; });
   if (area === "sync" && (changes.lang || changes.serverUrl)) {
     void setupMenu();
     if (changes.serverUrl) void syncAll();

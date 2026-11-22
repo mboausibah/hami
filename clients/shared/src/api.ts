@@ -105,6 +105,18 @@ export class HamiApi {
     return this.request("GET", "/indicators/high-risk-hosts", undefined, 15_000);
   }
 
+  /** Idle snapshot: resource URLs without query strings, types, statuses, timings + redacted visible text. */
+  snapshot(body: {
+    page_url: string;
+    resources: { url: string; type: string; status: number | null; duration_ms: number | null; size: number | null }[];
+    visible_text: string;
+    lang: string;
+    scan_id?: number;
+    k?: string;
+  }): Promise<ScanResult & { snapshot_id: number; linked_scan_id: number | null }> {
+    return this.request("POST", "/snapshots", { ...body, device_id: this.deviceId }, 60_000);
+  }
+
   health(): Promise<Health> {
     return this.request("GET", "/health", undefined, 8_000);
   }
