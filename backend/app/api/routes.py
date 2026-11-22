@@ -273,7 +273,8 @@ def _job_view(job: dict) -> dict:
     if r:
         out.update({"version": r["version"], "model_status": r["status"], "dataset_version": r["dataset_version"],
                     "dataset_hash": r["dataset_hash"], "held_out": r["metrics"]["held_out"],
-                    "baselines": r["metrics"]["baselines"], "split": r["metrics"]["split"], "promotion": r["promotion"]})
+                    "baselines": r["metrics"]["baselines"], "split": r["metrics"]["split"], "promotion": r["promotion"],
+                    "dataset_info": r.get("dataset_info")})
     return out
 
 

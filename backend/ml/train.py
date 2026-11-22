@@ -77,7 +77,12 @@ def build_dataset(kind: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         path = settings.processed_dir / "records.jsonl"
         records = read_jsonl(path)
         if not records:
-            raise SystemExit(f"{path} is missing or empty - run `make import` first (or `make train-synthetic`).")
+            # Fresh clone without private data: synthetic corpus + reviewed scans from the evidence log.
+            from ml.import_private import import_synthetic
+
+            print(f"note: {path} not found (run `make import` to include private/public data); "
+                  "using the synthetic corpus + reviewed scans")
+            records = import_synthetic({})
         with db() as conn:
             reviewed = reviewed_records(conn)
         # A reviewer label wins over an imported label for the same capture.
@@ -190,7 +195,7 @@ def run_training(kind: str = "full", quiet: bool = False) -> dict[str, Any]:
     write_registry(reg)
     invalidate()
     result = {"version": version, "status": status, "dataset_version": ds_version, "dataset_hash": ds_hash,
-              "metrics": metrics, "promotion": decision}
+              "metrics": metrics, "promotion": decision, "dataset_info": info}
     if not quiet:
         print_result(result)
     return result
