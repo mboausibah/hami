@@ -148,6 +148,35 @@ def high_risk_hosts() -> dict:
     return {"version": version, "count": len(names), "hosts": names, "domains": domains}
 
 
+@router.get("/indicators/local-lists", dependencies=[Depends(rate_limit("default"))])
+def local_lists() -> dict:
+    """Everything the extension needs to decide on the device, without a server call per page:
+    reviewer-confirmed hosts and registrable domains, recently certificate-logged look-alike domains, and
+    distinctive build-file names of confirmed kits (matched against the page's own resource names)."""
+    from app.analyze.assets import common_file_name
+    from app.linking.kit import common_shas
+    from app.urls import registrable_domain
+
+    with db() as conn:
+        hosts, version = cases.high_risk_hosts(conn)
+        names = [h["host"] for h in hosts]
+        domains = sorted({registrable_domain(h) for h in names if "." in registrable_domain(h)})
+        recent = [r[0] for r in conn.execute(
+            "SELECT domain FROM discovered_domains WHERE source='ct' AND first_seen_at >= datetime('now', '-14 days') "
+            "ORDER BY first_seen_at DESC LIMIT 2000")]
+        fraud_sites = sorted({registrable_domain(s["host"]) for s in cases.reviewed_fraud_scans(conn)})
+        kit_files: list[str] = []
+        if fraud_sites:
+            marks = ",".join("?" * len(fraud_sites))
+            rows = conn.execute(f"SELECT file_name, sha256 FROM asset_files WHERE site IN ({marks}) AND name_hashed=1 "
+                                f"AND kind IN ('js','css')", fraud_sites).fetchall()
+            common = common_shas(conn, [r["sha256"] for r in rows])
+            kit_files = sorted({r["file_name"] for r in rows if r["sha256"] not in common and not common_file_name(r["file_name"])})
+        n_disc = conn.execute("SELECT COALESCE(MAX(id), 0) FROM discovered_domains").fetchone()[0]
+    return {"version": f"{version}.{n_disc}.{len(kit_files)}", "hosts": names, "domains": domains,
+            "recent_cert_domains": recent, "kit_files": kit_files[:5000]}
+
+
 @router.get("/health")
 def health() -> dict:
     with db() as conn:

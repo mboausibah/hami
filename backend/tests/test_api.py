@@ -114,3 +114,9 @@ def test_rate_limit():
 
 def test_bad_device_id(client):
     assert client.get("/alerts?device_id=x").status_code == 400
+
+
+def test_local_lists_feed(client):
+    d = client.get("/indicators/local-lists").json()
+    assert set(d) >= {"version", "hosts", "domains", "recent_cert_domains", "kit_files"}
+    assert all(isinstance(d[k], list) for k in ("hosts", "domains", "recent_cert_domains", "kit_files"))

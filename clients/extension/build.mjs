@@ -29,6 +29,7 @@ await build({
         popup: resolve(src, "popup/popup.html"),
         options: resolve(src, "options/options.html"),
         result: resolve(src, "result/result.html"),
+        consent: resolve(src, "consent/consent.html"),
       },
       output: { entryFileNames: "assets/[name].js", chunkFileNames: "assets/[name]-[hash].js", assetFileNames: "assets/[name][extname]" },
     },

@@ -1,15 +1,24 @@
-/** On every page: warning banner when the site is on the on-device, reviewer-confirmed high-risk list
- * (no server call). Optional auto-check (off by default) for job/task-scam keyword pages. */
-import { TIERS, hostMatches, t, type Lang, type ScanResult } from "@hami/shared";
-import { send } from "../lib/messages";
-import { getLocalList, getSettings } from "../lib/settings";
+/** On every http(s) page:
+ *  1. reviewer-confirmed high-risk site (on-device list) -> warning banner, no server call;
+ *  2. otherwise the background classifies the page on the device (sensitive / well-known sites are skipped and
+ *     nothing more happens);
+ *  3. candidate pages are checked automatically (only after the user's consent): the toolbar badge shows the
+ *     result; the full-page banner appears only for High risk. */
+import { TIERS, t, type Lang, type ScanResult } from "@hami/shared";
+import { send, type ClassifyData } from "../lib/messages";
+import { autoCheckActive, getSettings } from "../lib/settings";
 import { WIDGET_CSS, dirFor } from "./overlay";
 
 const HOST_ID = "hami-banner";
-const JOB_HINTS = [
-  /part[\s-]?time/i, /daily tasks?/i, /work from (home|your phone)/i, /commission/i, /recharge|top[\s-]?up/i,
-  /\bvip ?\d/i, /invitation code|invite code/i, /earn .{0,20} per (day|task|order)/i, /grab orders?/i,
-  /وظائف|وظيفة/, /دوام جزئي/, /مهام يومية/, /عمولة/, /اشحن|شحن الرصيد/, /رمز الدعوة/, /العمل من المنزل/,
+const SIGNALS = [
+  /part[\s-]?time|work from (home|your phone)|daily tasks?|grab orders?/i,               // jobs / tasks
+  /recharge|top[\s-]?up|deposit|withdraw/i,                                              // deposits
+  /\bvip ?\d|invitation code|invite code|referral code/i,                                // levels / invites
+  /guaranteed (profit|return)|daily (profit|return)|\d+(\.\d+)?\s?% (daily|per day)/i,   // investment
+  /casino|slot games|jackpot|bet now|lucky ?spin|free spins/i,                           // gambling
+  /card number|cvv|one[\s-]?time password|otp|verify your (card|account)/i,              // credentials
+  /customs fee|redelivery fee|parcel (is )?on hold/i,                                    // parcel
+  /وظائف|وظيفة|دوام جزئي|مهام يومية|اشحن الرصيد|إيداع|ايداع|سحب|رمز الدعوة|أرباح مضمونة|كازينو|رمز التحقق|رسوم الجمارك/,
 ];
 
 function dismissed(): boolean {
@@ -67,26 +76,44 @@ function showBanner(lang: Lang, title: string, body: string, note: string, color
   document.documentElement.append(host);
 }
 
-function looksJobLike(): boolean {
-  const text = `${document.title}\n${(document.body?.innerText ?? "").slice(0, 6000)}`;
-  return JOB_HINTS.filter((rx) => rx.test(text)).length >= 2;
+function pageSignals(): number {
+  const text = `${document.title}\n${(document.body?.innerText ?? "").slice(0, 8000)}`;
+  return SIGNALS.filter((rx) => rx.test(text)).length;
+}
+
+/** File names of the page's own resources (stay on the device; compared with known kit file names). */
+export function resourceNames(): string[] {
+  const names = new Set<string>();
+  for (const e of performance.getEntriesByType("resource") as PerformanceResourceTiming[]) {
+    try {
+      const n = new URL(e.name).pathname.split("/").pop();
+      if (n && /\.(m?js|css)$/i.test(n)) names.add(n);
+    } catch {
+      /* ignore */
+    }
+  }
+  return [...names].slice(0, 400);
 }
 
 async function main(): Promise<void> {
-  const [s, list] = await Promise.all([getSettings(), getLocalList()]);
+  const s = await getSettings();
   const lang = s.lang;
-  if (s.localList && list.hosts.some((h) => hostMatches(location.hostname, h))) {
-    showBanner(lang, t("bannerTitle", lang), t("bannerBody", lang), t("bannerLocal", lang), TIERS.high_risk.color);
+  const cls = await send<ClassifyData>({ type: "classify", url: location.href, resourceNames: resourceNames() });
+  if (!cls.ok) return;
+  if (cls.data.highRisk) {
+    if (s.localList) showBanner(lang, t("bannerTitle", lang), t("bannerBody", lang), t("bannerLocal", lang), TIERS.high_risk.color);
     return;
   }
-  if (s.autoCheck && looksJobLike()) {
-    const res = await send<ScanResult>({ type: "autoCheck", url: location.href });
-    if (res.ok && (res.data.tier === "high_risk" || res.data.tier === "caution")) {
-      const style = TIERS[res.data.tier];
-      showBanner(lang, `${t("autoCheckTitle", lang)}: ${style.label[lang]}`, res.data.headline?.[lang] ?? style.headline[lang],
-        res.data.clues[0]?.text[lang] ?? "", style.color, res.data);
-    }
+  if (cls.data.skip || !autoCheckActive(s)) return; // sensitive / well-known / no consent: nothing is sent
+  const reasons = [...cls.data.reasons];
+  if (pageSignals() >= 1) reasons.push("page_signals");
+  const res = await send<ScanResult>({ type: "autoCheck", url: location.href, reasons });
+  if (res.ok && res.data.tier === "high_risk") {
+    const style = TIERS.high_risk;
+    showBanner(lang, `${t("autoCheckTitle", lang)}: ${style.label[lang]}`, res.data.headline?.[lang] ?? style.headline[lang],
+      res.data.clues[0]?.text[lang] ?? "", style.color, res.data);
   }
+  document.dispatchEvent(new CustomEvent("hami-candidate", { detail: { checked: res.ok } }));
 }
 
 void main();

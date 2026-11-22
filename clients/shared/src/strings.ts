@@ -79,10 +79,10 @@ export const STRINGS = {
     en: "Uses the reviewer-confirmed list stored on this device. No server call per page. On by default.",
     ar: "يستخدم القائمة المؤكدة من المراجعين والمخزنة على هذا الجهاز. لا اتصال بالخادم لكل صفحة. مفعل افتراضيًا.",
   },
-  autoCheck: { en: "Auto-check job and task pages", ar: "فحص صفحات الوظائف والمهام تلقائيًا" },
+  autoCheck: { en: "Check unfamiliar pages automatically", ar: "افحص الصفحات غير المألوفة تلقائيًا" },
   autoCheckHelp: {
-    en: "When a page looks like a job or task offer, sends its address to the Hami server for a check. This shares those page addresses. Off by default.",
-    ar: "عندما تبدو الصفحة كعرض وظيفة أو مهام، يرسل عنوانها إلى خادم حامي لفحصها. هذا يعني مشاركة عناوين تلك الصفحات. معطل افتراضيًا.",
+    en: "Needs your consent (shown once). Well-known, banking, government, e-mail and health sites are skipped on your device. For other pages the address is sent for a check, and after 10 seconds without activity a list of loaded files and servers (no query strings) plus the visible text. No cookies, form values or page contents from your browser.",
+    ar: "يتطلب موافقتك (تظهر مرة واحدة). يتم تخطي المواقع المعروفة ومواقع البنوك والحكومة والبريد والصحة على جهازك. للصفحات الأخرى يُرسل العنوان للفحص، وبعد ١٠ ثوانٍ دون نشاط قائمة بالملفات والخوادم المحمّلة (دون معاملات الاستعلام) مع النص الظاهر. لا تُرسل ملفات تعريف الارتباط أو قيم النماذج أو محتوى الصفحات من متصفحك.",
   },
   privacyNote: {
     en: "Hami never sends your browsing history or search queries. Checks are sent only when you ask, or for job-like pages if you turn on auto-check.",

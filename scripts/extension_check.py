@@ -60,7 +60,54 @@ def main() -> int:
             base = f"chrome-extension://{ext_id}"
             check("extension loaded (MV3 service worker running)", bool(ext_id), ext_id)
             sw.evaluate("cfg => chrome.storage.sync.set(cfg)", {"serverUrl": api, "lang": "en", "localList": True,
-                                                                 "checkSearchResults": True, "autoCheck": False})
+                                                                 "checkSearchResults": True})
+            # PART 2: one-time consent screen on install; automatic checking only after agreeing.
+            opened = []
+            for _ in range(40):
+                opened = sw.evaluate("async () => (await chrome.tabs.query({})).map(t => t.url || '')"
+                                     ".filter(u => u.includes('consent/consent.html'))")
+                if opened:
+                    break
+                time.sleep(0.25)
+            consent = ctx.new_page()
+            consent.goto(f"{base}/consent/consent.html")
+            check("consent screen opened on install (Arabic + English)", bool(opened) and
+                  "الفحص التلقائي" in consent.inner_text("body") and "Automatic checking" in consent.inner_text("body"),
+                  str(opened[:1]))
+            before = sw.evaluate("() => chrome.storage.sync.get(['autoCheck','consentAt'])")
+            check("automatic checking off before consent", not before.get("autoCheck"))
+            consent.click("#agree")
+            consent.wait_for_selector("#done:not([hidden])")
+            after = sw.evaluate("() => chrome.storage.sync.get(['autoCheck','consentAt'])")
+            check("agreeing turns automatic checking on (consent recorded)", after.get("autoCheck") is True and bool(after.get("consentAt")))
+            consent.close()
+            # A skipped (sensitive) site sends nothing: a bank page served locally by request interception.
+            bank_html = "<html><body><h1>Online banking</h1><p>Deposit, withdraw, part-time job offers, VIP 2</p></body></html>"
+            ctx.route("https://www.emiratesnbd.com/**", lambda route: route.fulfill(status=200, content_type="text/html", body=bank_html))
+            bank = ctx.new_page()
+            bank.goto("https://www.emiratesnbd.com/en/")
+            bank.wait_for_timeout(3000)
+            c0 = httpx.Client(base_url=api, headers=auth, timeout=60)
+            bank_scans = [x for x in c0.get("/scans", params={"limit": 200}).json()["scans"] if "emiratesnbd" in x["host"]]
+            cls = bank.evaluate("1")  # page loaded
+            check("banking site skipped on the device: nothing sent", bank_scans == [], str(bank_scans[:1]))
+            bank.close()
+            # A candidate page gets a badge without clicking; High risk also shows the full-page banner.
+            cand = ctx.new_page()
+            cand.goto(site("site-c"))
+            badge = ""
+            for _ in range(120):
+                badge = "".join(sw.evaluate("async () => { const ts = await chrome.tabs.query({}); "
+                                            "return Promise.all(ts.map(t => chrome.action.getBadgeText({tabId: t.id}))); }"))
+                if badge.strip("0123456789"):
+                    break
+                time.sleep(0.5)
+            check("candidate page (Site C) gets a toolbar badge without clicking", "✓" in badge, repr(badge))
+            cand.goto(site("site-a"))
+            cand.wait_for_selector("#hami-banner", timeout=90000)
+            btxt = cand.evaluate("document.querySelector('#hami-banner').shadowRoot.textContent")
+            check("High-risk candidate (Site A) shows the full-page banner automatically", "High risk" in btxt, btxt[:80])
+            cand.close()
 
             # Popup check of Site A (popup page opened as a tab with ?target=).
             page = ctx.new_page()
@@ -134,8 +181,10 @@ def main() -> int:
             opts = ctx.new_page()
             opts.goto(f"{base}/options/options.html")
             synced = opts.evaluate("""() => new Promise(r => chrome.runtime.sendMessage({type: 'syncNow'}, r))""")
+            check("on-device classification marks a bank as sensitive (no network)",
+                  opts.evaluate("""() => new Promise(r => chrome.runtime.sendMessage({type: 'classify', url: 'https://www.adcb.com/'}, r))""")["data"]["reason"] == "sensitive")
             opts.close()
-            hosts = sw.evaluate("() => chrome.storage.local.get('highRisk').then(x => x.highRisk.hosts)")
+            hosts = sw.evaluate("() => chrome.storage.local.get('lists').then(x => x.lists.hosts)")
             check("high-risk list synced to the device", "site-a.localhost" in hosts, f"{hosts} v{synced.get('data', {}).get('version')}")
             api_hits: list[str] = []
             page.on("request", lambda r: api_hits.append(r.url) if r.url.startswith(api) else None)

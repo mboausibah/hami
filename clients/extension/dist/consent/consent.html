@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hami — automatic checking / الفحص التلقائي</title>
+<style>:root{--brand:#0b5d4b;--line:#e3e8ee;--muted:#5b6876}body{color:#16202a;background:#f6f7f9;margin:0;font:15px/1.55 system-ui,-apple-system,Segoe UI,Noto Sans Arabic,Tahoma,sans-serif}header{background:var(--brand);color:#fff;align-items:center;gap:10px;padding:14px 22px;font-size:18px;font-weight:800;display:flex}header img{background:#fff;border-radius:6px}main{max-width:1000px;margin:20px auto;padding:0 16px}.cols{grid-template-columns:1fr 1fr;gap:16px;display:grid}@media (width<=760px){.cols{grid-template-columns:1fr}}.box{border:1px solid var(--line);background:#fff;border-radius:12px;padding:18px}h2{margin:0 0 8px;font-size:17px}h3{margin:14px 0 4px;font-size:14px}ul{margin:4px 0;padding-inline-start:20px}li{margin:3px 0}.actions{flex-wrap:wrap;justify-content:center;gap:12px;margin:20px 0;display:flex}button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:10px 22px;font-weight:700}#agree{background:var(--brand);color:#fff}#decline{border:1px solid var(--line);background:#fff}.done{text-align:center;color:var(--brand);font-weight:700}.muted{color:var(--muted);font-size:13px}</style>
+  <script type="module" crossorigin src="../assets/consent.js"></script>
+</head>
+<body>
+<header><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABWUlEQVR42mNgGAVEAu5Yb30gtofieCCuR8PxSPL6lFgkDzWsH4j3A/F9IP5PJr4PNaMfaqY8Icv3U2AZsXj/qANGHUBzB1hU54DxgDhg8aHd/2Hg0LVL9HVA67ql/9FB2sw++jggvL/5PzZQungm7R0Aiu/3Xz5jWA4S0yxMpNwBoKAFxSeIlkoPQ5ED8R+8eoHV9x6tFZSnAfR4vfjgLoo8yGFEBj15DsBmASilo6d4bPJUccCmM8ewWoLL5+ghRKoD5qNrwBfH2BIdehrBgucTanQQncrRLcdT+iFjfUJtgn5yHIGlwMGG+4lpEfED8XlSHAHKKURYDjKTn5T233tiSjwCKR6G35PcTsTnCFDpBvI1kcH+nuxGKtQRlDZK9SltjuNME1SLcyIdMp8Ey+fTqnMSjytdIMV3PK17SPI4as39BDseVHZIPtTHIJw/UP1Febr6mhYAAMAJzSWpBvNtAAAAAElFTkSuQmCC" alt="" width="28" height="28"> حامي Hami</header>
+<main>
+  <div class="cols">
+    <section class="box" lang="en" dir="ltr">
+      <h2>Automatic checking</h2>
+      <p>Hami can check unfamiliar pages for you automatically, so you don't have to press a button. It is off until you agree.</p>
+      <h3>What stays on your device</h3>
+      <ul>
+        <li>Every page is first sorted on your device. Well-known sites (top 10,000 sites and a UAE allowlist) are skipped.</li>
+        <li>Banking, government, e-mail and health sites are <strong>always</strong> skipped and never sent.</li>
+        <li>Pages on the reviewer-confirmed high-risk list show a warning without contacting the server.</li>
+      </ul>
+      <h3>What is sent, and when</h3>
+      <ul>
+        <li>For an unfamiliar page only: its address is sent to the Hami server, which opens it in its own safe browser and returns a risk level (shown as a green, amber or red badge on the Hami icon; a full warning only for High risk).</li>
+        <li>If the page stays open without activity for 10 seconds: a list of the files and servers the page loaded (addresses without query strings), their types, status codes and timings, plus the page's visible text (e-mails and phone numbers removed on your device).</li>
+        <li>Never sent: cookies, passwords, form values, request or response contents, your browsing history of skipped sites, or your search queries.</li>
+        <li>At most one snapshot per page load; checks are rate-limited. Turn this off any time in Hami's settings.</li>
+      </ul>
+    </section>
+    <section class="box" lang="ar" dir="rtl">
+      <h2>الفحص التلقائي</h2>
+      <p>يمكن لحامي فحص الصفحات غير المألوفة تلقائيًا دون الضغط على أي زر. الميزة معطلة حتى توافق.</p>
+      <h3>ما يبقى على جهازك</h3>
+      <ul>
+        <li>يتم تصنيف كل صفحة أولًا على جهازك. يتم تخطي المواقع المعروفة (أشهر ١٠٬٠٠٠ موقع وقائمة مواقع إماراتية معروفة).</li>
+        <li>مواقع البنوك والجهات الحكومية والبريد الإلكتروني والصحة يتم تخطيها <strong>دائمًا</strong> ولا تُرسل أبدًا.</li>
+        <li>الصفحات الموجودة في قائمة المواقع عالية الخطورة المؤكدة تعرض تحذيرًا دون الاتصال بالخادم.</li>
+      </ul>
+      <h3>ما يُرسل ومتى</h3>
+      <ul>
+        <li>للصفحات غير المألوفة فقط: يُرسل عنوان الصفحة إلى خادم حامي الذي يفتحها في متصفحه الآمن ويعيد مستوى الخطورة (يظهر كشارة خضراء أو صفراء أو حمراء على أيقونة حامي، والتحذير الكامل فقط عند الخطر المرتفع).</li>
+        <li>إذا بقيت الصفحة مفتوحة دون نشاط لمدة ١٠ ثوانٍ: قائمة بالملفات والخوادم التي حمّلتها الصفحة (عناوين دون معاملات الاستعلام)، وأنواعها ورموز الحالة والأزمنة، مع النص الظاهر للصفحة (بعد حذف البريد الإلكتروني وأرقام الهاتف على جهازك).</li>
+        <li>لا يُرسل أبدًا: ملفات تعريف الارتباط، كلمات المرور، قيم النماذج، محتوى الطلبات أو الردود، سجل تصفحك للمواقع التي تم تخطيها، أو عبارات البحث.</li>
+        <li>لقطة واحدة كحد أقصى لكل تحميل صفحة، والفحوصات محدودة العدد. يمكنك إيقاف الميزة في أي وقت من إعدادات حامي.</li>
+      </ul>
+    </section>
+  </div>
+  <div class="actions">
+    <button id="agree">I agree — turn on automatic checking · أوافق — فعّل الفحص التلقائي</button>
+    <button id="decline">Not now · ليس الآن</button>
+  </div>
+  <p id="done" class="done" hidden></p>
+  <p class="muted" style="text-align:center">You can still check any page yourself with the Hami button or by right-clicking a link. ·
+    يمكنك دائمًا فحص أي صفحة بنفسك عبر زر حامي أو بالنقر بزر الفأرة الأيمن على أي رابط.</p>
+</main>
+</body>
+</html>

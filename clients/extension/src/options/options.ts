@@ -48,13 +48,18 @@ async function init(): Promise<void> {
       $("saved").textContent = (e as Error).message;
       return;
     }
+    const wantAuto = $<HTMLInputElement>("autoCheck").checked;
+    const before = await getSettings();
     const next = await saveSettings({
       serverUrl,
       lang: $<HTMLSelectElement>("lang").value as Lang,
       localList: $<HTMLInputElement>("localList").checked,
       checkSearchResults: $<HTMLInputElement>("checkSearchResults").checked,
-      autoCheck: $<HTMLInputElement>("autoCheck").checked,
+      // Turning automatic checking on requires the consent screen; turning it off withdraws consent.
+      autoCheck: wantAuto && !!before.consentAt,
+      consentAt: wantAuto ? before.consentAt : null,
     });
+    if (wantAuto && !before.consentAt) await chrome.tabs.create({ url: chrome.runtime.getURL("consent/consent.html") });
     lang = next.lang;
     applyLang(lang);
     $("saved").className = "ok";
