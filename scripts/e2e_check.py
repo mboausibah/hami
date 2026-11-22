@@ -5,6 +5,8 @@
   2. Site B -> proposed link to A; reviewer approves; a watcher of A gets the alert; a non-watcher doesn't.
   3. Approve B for training; retrain -> new dataset + model version; metrics printed; promotion rule applied.
   4. Site C -> common service recorded, not High risk, no alert.
+  5. Site D (login wall sharing app bundles + language pack with confirmed Site A) -> High risk through the kit
+     match, with the matched files as clues; Site C (common libraries only) never kit-matches.
 
 Usage:
   python scripts/e2e_check.py --start-local            # isolated API + test sites in a temp data dir
@@ -202,9 +204,24 @@ def run(c: httpx.Client, site, auth: dict) -> None:  # noqa: ANN001
     check("4c no link proposed", c_links == [])
     alerts = c.get("/alerts/review", headers=auth).json()["alerts"]
     check("4d no alert", not any(x["related_scan_id"] == cc["scan_id"] for x in alerts))
-    check("4e watcher still has exactly the approved A/B alert",
+    check("4e no kit (same software) match for a site sharing only common libraries",
+          not any(l["relation_type"] == "same_kit" for l in c_links))
+    check("4f watcher still has exactly the approved A/B alert",
           len([x for x in c.get("/alerts", params={"device_id": watcher}).json()["alerts"]
                if x["related_host"] == "site-c.localhost"]) == 0)
+
+    print("\nCheck 5: Site D, a login wall running the same software as confirmed Site A")
+    dd = c.post("/scans", json={"url": site("site-d"), "source_type": "manual", "force": True}).json()
+    check("5a Site D is High risk", dd.get("tier") == "high_risk", f"tier={dd.get('tier')} rules={dd.get('rules_fired')}")
+    check("5b decided by the kit match (page itself is a sign-in wall)",
+          "signin_or_thin+same_kit_as_reviewed_case" in dd.get("rules_fired", []), str(dd.get("rules_fired")))
+    kit = next((cl for cl in dd.get("clues", []) if cl["type"] == "kit_match"), None)
+    check("5c clue names the confirmed site and the identical files",
+          kit is not None and "site-a.localhost" in kit["text"]["en"], kit["text"]["en"] if kit else "no kit clue")
+    files = (dd.get("evidence") or {}).get("kit_match") or {}
+    check("5d matched files listed as evidence (content-hashed build names)",
+          len(files.get("files", [])) >= 3 and any(f.startswith("en-US-") for f in files.get("files", [])),
+          ", ".join(files.get("files", [])[:4]))
 
 
 if __name__ == "__main__":

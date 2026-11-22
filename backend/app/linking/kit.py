@@ -112,6 +112,9 @@ def kit_matches(conn: sqlite3.Connection, scan_id: int) -> list[KitMatch]:
         e["scan_id"] = max(e["scan_id"], r["scan_id"])
         e["scans"].add(r["scan_id"])
         label = mine_row["file_name"] + ("" if how == "identical" else f" ({how})")
+        prev = e["files"].get(mine_row["file_name"])
+        if prev is not None and "(" not in prev[0]:
+            return  # already matched byte-for-byte: keep the strongest label
         e["files"][mine_row["file_name"]] = (label, mine_row)
 
     shas = [r["sha256"] for r in mine]
