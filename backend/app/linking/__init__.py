@@ -27,8 +27,9 @@ DYNAMIC_COMMON_MIN_SITES = 8
 MAX_COMPARE_HOSTS = 3000
 FRAUD_INDICATORS = ("deposit_to_unlock", "advance_fee", "commission_transfer", "gambling_deposit", "investment_promise",
                     "credential_request", "deposit_request", "vip_table", "invitation_code", "withdrawal_condition",
-                    "commission_rate", "off_platform_contact")
-RELATION_ORDER = ("registration_destination", "asset_host", "same_template", "same_payment_script")
+                    "commission_rate", "off_platform_contact", "code_behavior")
+RELATION_ORDER = ("same_kit", "registration_destination", "asset_host", "shared_infrastructure", "same_template",
+                  "same_payment_script", "infrastructure_pattern")
 
 
 def dynamic_common_hosts(conn: sqlite3.Connection, min_sites: int = DYNAMIC_COMMON_MIN_SITES) -> set[str]:
@@ -128,6 +129,9 @@ def process_scan(scan_id: int) -> list[int]:
         if common_service_category(new["host"]):
             return created
         common = dynamic_common_hosts(conn)
+        from app.linking.kit import infra_signals, kit_matches
+
+        kits = {k.site: k for k in kit_matches(conn, scan_id)}
         others = conn.execute(
             "SELECT MAX(scan_id) AS scan_id, host FROM scans WHERE status='done' AND host<>? AND capture_status='ok' "
             "GROUP BY host ORDER BY MAX(scan_id) DESC LIMIT ?", (new["host"], MAX_COMPARE_HOSTS)).fetchall()
@@ -136,6 +140,17 @@ def process_scan(scan_id: int) -> list[int]:
             if other is None:
                 continue
             signals = compare(other, new, common)
+            km = kits.get(other["site"])
+            if km is not None and other["host"] in km.scan_hosts:
+                signals.insert(0, {"relation": "same_kit", "strength": km.strength,
+                                   "detail": (f"same software kit: {len(km.files)} identical delivered files"
+                                              if km.strength == "strong" else
+                                              f"partial kit match: {len(km.files)} shared distinctive files")
+                                   + " (" + ", ".join(km.files[:8]) + ")",
+                                   "obs_ids": [], "artifact_ids": _har_artifacts(conn, other["scan_id"], scan_id),
+                                   "files": km.files})
+            signals += [x for x in infra_signals(conn, other["scan_id"], scan_id, common)
+                        if not any(y["relation"] == x["relation"] for y in signals)]
             if not is_candidate(signals):
                 continue
             # One open link per pair of sites: a re-scan of either site does not re-propose it.
@@ -158,6 +173,16 @@ def process_scan(scan_id: int) -> list[int]:
             created.append(lid)
             _pending_alerts_for_link(conn, lid)
     return created
+
+
+def _har_artifacts(conn: sqlite3.Connection, *scan_ids: int) -> list[int]:
+    out = []
+    for sid in scan_ids:
+        row = conn.execute("SELECT a.artifact_id FROM artifacts a JOIN scans s ON a.scan_id=COALESCE(s.stored_from_scan_id, s.scan_id) "
+                           "WHERE s.scan_id=? AND a.kind='har' ORDER BY a.artifact_id LIMIT 1", (sid,)).fetchone()
+        if row:
+            out.append(row[0])
+    return out
 
 
 def _has_fraud(conn: sqlite3.Connection, scan_id: int) -> bool:

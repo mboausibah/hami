@@ -12,7 +12,7 @@ PY   := $(ROOT)/$(VENV_PY)
 BE   := cd backend &&
 export PYTHONUTF8=1
 
-.PHONY: help venv deps db run api testsites corpus import capture-labels capture-legit capture-har-candidates \
+.PHONY: help venv deps db run api testsites corpus import import-sessions tier-check capture-labels capture-legit capture-har-candidates \
         capture-live train train-synthetic eval eval-live discovery discovery-once static-check test e2e \
         clients extension check docker-up docker-down clean-storage
 
@@ -55,7 +55,14 @@ corpus: deps
 	$(PY) testsites/generator/generate.py
 
 import: deps
+	$(BE) $(PY) -m ml.import_sessions
 	$(BE) $(PY) -m ml.import_private
+
+import-sessions: deps
+	$(BE) $(PY) -m ml.import_sessions
+
+tier-check: deps
+	$(BE) $(PY) -m ml.tier_check --show
 
 capture-labels: deps
 	$(BE) $(PY) -m ml.capture_lists labels --yes

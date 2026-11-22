@@ -140,7 +140,12 @@ def high_risk_hosts() -> dict:
     """Hostnames from reviewer-approved High-risk (fraudulent) cases only, with a version number."""
     with db() as conn:
         hosts, version = cases.high_risk_hosts(conn)
-    return {"version": version, "count": len(hosts), "hosts": [h["host"] for h in hosts]}
+    from app.urls import registrable_domain
+
+    names = [h["host"] for h in hosts]
+    # Registrable domains of confirmed cases: every subdomain inherits the risk (PSL keeps shared platforms apart).
+    domains = sorted({registrable_domain(h) for h in names if registrable_domain(h) and "." in registrable_domain(h)})
+    return {"version": version, "count": len(names), "hosts": names, "domains": domains}
 
 
 @router.get("/health")

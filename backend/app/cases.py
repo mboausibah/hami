@@ -109,3 +109,36 @@ def strong_reviewed_links(conn: sqlite3.Connection, scan_id: int, host: str,
             seen.add(k)
             dedup.append(o)
     return dedup
+
+
+def domain_inheritance(conn: sqlite3.Connection, host: str) -> dict[str, Any] | None:
+    """A subdomain (or sibling host) of a reviewer-confirmed fraudulent registrable domain inherits the risk.
+    The Public Suffix List (private section included) keeps shared platforms like *.github.io separate."""
+    site = registrable_domain(host)
+    if not site or site == host and "." not in site:
+        return None
+    for s in reviewed_fraud_scans(conn):
+        if s["host"] != host and registrable_domain(s["host"]) == site:
+            return {"domain": site, "confirmed_host": s["host"], "scan_id": s["scan_id"]}
+    return None
+
+
+def kit_context(conn: sqlite3.Connection, scan_id: int, host: str, common: set[str]) -> dict[str, Any]:
+    """Kit and infrastructure matches between this scan and reviewer-confirmed fraudulent cases."""
+    from app.linking.kit import infra_signals, kit_matches
+
+    fraud = {}
+    for s in reviewed_fraud_scans(conn):
+        if registrable_domain(s["host"]) != registrable_domain(host):
+            fraud.setdefault(registrable_domain(s["host"]), s)
+    strong, partial = [], []
+    for k in kit_matches(conn, scan_id):
+        if k.site in fraud:
+            entry = {"relation": "same_kit", "scan_id": fraud[k.site]["scan_id"], "host": fraud[k.site]["host"],
+                     "files": k.files[:25], "n_files": len(k.files)}
+            (strong if k.strength == "strong" else partial).append(entry)
+    for site, s in list(fraud.items())[:200]:
+        for sig in infra_signals(conn, s["scan_id"], scan_id, common):
+            entry = {"relation": sig["relation"], "scan_id": s["scan_id"], "host": s["host"], "detail": sig["detail"]}
+            (strong if sig["strength"] == "strong" else partial).append(entry)
+    return {"strong": strong, "partial": partial}

@@ -1,14 +1,21 @@
-"""Rules layer + risk tiers (exactly as in the proposal).
+"""Rules layer + risk tiers (scam-type agnostic).
 
-High risk  - a strong fraud behavior (deposit to unlock / advance fee / commission for moving money,
-             plus gambling deposits, guaranteed-return investment and card/OTP credential requests)
-             AND the classifier agrees; or a strong reviewed-case link plus any fraud behavior;
-             or the exact host was confirmed fraudulent by a reviewer.
-Caution    - fraud signals without classifier agreement / a payment request, a listing-identity
-             mismatch, or a classifier score above the caution threshold.
+Evidence sources: the visible page, the site's delivered code (string literals of its own JS bundles and its
+build file names, read but never executed), kit fingerprints (identical / near-identical delivered files),
+shared infrastructure, registrable-domain inheritance and reviewer decisions.
+
+High risk  - a strong fraud behavior on the page AND the classifier agrees; or a strong reviewed-case link
+             (registration destination, distinctive asset host, same software kit, shared infrastructure) plus
+             any fraud behavior; or the host / its registrable domain was confirmed fraudulent by a reviewer;
+             or the page is a sign-in wall / thin AND (several distinctive kit files match a confirmed case, OR
+             strong fraud behavior is found in the delivered code and the classifier agrees on that code text).
+Caution    - fraud signals without classifier agreement, a listing-identity mismatch, a page score above the
+             caution threshold, a partial kit / infrastructure match with a confirmed case, or fraud behavior
+             in the delivered code without a kit match.
 No strong signals - otherwise; wording says it is not a guarantee.
-Insufficient evidence - failed load, sign-in wall, cloaking suspected or too little content.
-Weak signals (common analytics, CDN, hosting, payment providers) never raise the tier alone.
+Insufficient evidence - only when there is no usable page text, no usable code text and no kit, domain or
+             infrastructure match (failed load, sign-in wall, cloaking, too little content).
+Weak signals (common analytics, CDN, hosting, payment providers, common libraries) never raise the tier alone.
 """
 from __future__ import annotations
 
@@ -20,18 +27,29 @@ from app.scoring import texts as T
 
 FRAUD_BEHAVIORS = ("deposit_to_unlock", "advance_fee", "commission_transfer", "gambling_deposit",
                    "investment_promise", "credential_request")
-CLUE_PRIORITY = ("identity_mismatch", "reviewed_case_exact_host", "deposit_to_unlock", "advance_fee",
-                 "commission_transfer", "credential_request", "gambling_deposit", "investment_promise",
-                 "reviewed_case_link", "vip_table", "withdrawal_condition", "invitation_code", "commission_rate",
-                 "off_platform_contact", "deposit_request", "task_earning", "gambling", "fake_shop_discount",
-                 "classifier_score")
+CLUE_PRIORITY = ("identity_mismatch", "reviewed_case_exact_host", "reviewed_domain", "kit_match",
+                 "deposit_to_unlock", "advance_fee", "commission_transfer", "credential_request", "gambling_deposit",
+                 "investment_promise", "reviewed_case_link", "kit_partial", "code_behavior", "vip_table",
+                 "withdrawal_condition", "invitation_code", "commission_rate", "off_platform_contact",
+                 "deposit_request", "task_earning", "gambling", "fake_shop_discount", "classifier_score")
 AMOUNT_CLUES = {"deposit_to_unlock", "advance_fee", "deposit_request"}
+CODE_MIN_WORDS = 40
 
 
 @dataclass
 class ReviewedContext:
     exact_host_label: str | None = None                     # latest reviewer label for this host
-    strong_links: list[dict[str, Any]] = field(default_factory=list)  # [{relation, scan_id, host}]
+    strong_links: list[dict[str, Any]] = field(default_factory=list)   # [{relation, scan_id, host, ...}]
+    partial_links: list[dict[str, Any]] = field(default_factory=list)  # partial kit / infrastructure matches
+    domain_inherited: dict[str, Any] | None = None          # {domain, confirmed_host, scan_id}
+
+    @property
+    def kit_strong(self) -> dict[str, Any] | None:
+        return next((l for l in self.strong_links if l["relation"] == "same_kit"), None)
+
+    @property
+    def kit_partial(self) -> dict[str, Any] | None:
+        return next((l for l in self.partial_links if l["relation"] == "same_kit"), None)
 
 
 @dataclass
@@ -44,20 +62,23 @@ class Decision:
 
 
 def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx: ReviewedContext,
-           stored: bool = False) -> Decision:
+           stored: bool = False, code_score: float | None = None) -> Decision:
     agree_t = thresholds.get("threshold_agree", 0.5)
     caution_t = thresholds.get("threshold_caution", 0.35)
     fired: list[str] = []
     behaviors = [b for b in an.behaviors if b in FRAUD_BEHAVIORS]
     signals = list(an.signals)
+    code_behaviors = [b for b in an.code_behaviors if b in FRAUD_BEHAVIORS]
+    code_usable = an.code_word_count >= CODE_MIN_WORDS
     reviewed_legit = ctx.exact_host_label == "legitimate"
     flags = an.flags or {}
     # A classifier score on a near-empty page, a sign-in wall or a block page says nothing about the site.
-    content_ok = not any(flags.get(k) for k in ("load_failed", "thin_content", "signin_wall", "cloaking_suspected"))
+    thin_page = any(flags.get(k) for k in ("load_failed", "thin_content", "signin_wall", "cloaking_suspected"))
     model_ok = score is not None and not reviewed_legit
     agree = model_ok and score >= agree_t
-    above_caution = model_ok and content_ok and score >= caution_t
-    any_fraud = bool(behaviors) or bool(signals)
+    above_caution = model_ok and not thin_page and score >= caution_t
+    code_agree = code_score is not None and not reviewed_legit and code_score >= agree_t and code_usable
+    any_fraud = bool(behaviors) or bool(signals) or bool(code_behaviors)
     not_checked = ["behind_signin", "payment_pages", "operator"]
     if score is None:
         not_checked.append("no_model")
@@ -71,14 +92,25 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
     if ctx.exact_host_label == "fraudulent":
         tier = "high_risk"
         fired.append("reviewed_case_exact_host")
+    if ctx.domain_inherited and not reviewed_legit:
+        tier = "high_risk"
+        fired.append("reviewed_registrable_domain")
     if behaviors and agree:
         tier = "high_risk"
         fired.append("strong_behavior+classifier_agrees")
         headline = behaviors[0]
-    if ctx.strong_links and any_fraud:
+    if ctx.strong_links and any_fraud and not reviewed_legit:
         tier = "high_risk"
         fired.append("reviewed_case_link+fraud_behavior")
         headline = headline or (behaviors[0] if behaviors else None)
+    if thin_page and not reviewed_legit:
+        if ctx.kit_strong:
+            tier = "high_risk"
+            fired.append("signin_or_thin+same_kit_as_reviewed_case")
+        if code_behaviors and code_agree:
+            tier = "high_risk"
+            fired.append("signin_or_thin+code_behavior+classifier_agrees_on_code")
+            headline = headline or code_behaviors[0]
 
     if tier is None:
         caution_reasons = []
@@ -90,8 +122,14 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
             caution_reasons.append("classifier_above_caution_threshold")
         if len(signals) >= 3:
             caution_reasons.append("multiple_fraud_signals")
-        if ctx.strong_links:
+        if ctx.strong_links and not reviewed_legit:
             caution_reasons.append("related_to_reviewed_case")
+        if ctx.partial_links and not reviewed_legit:
+            caution_reasons.append("partial_kit_or_infrastructure_match")
+        # Code evidence matters most when the page itself shows little (sign-in wall / thin); on a normal content
+        # page it also needs the classifier to agree on the code text.
+        if code_behaviors and not reviewed_legit and (thin_page or code_agree):
+            caution_reasons.append("fraud_behavior_in_delivered_code")
         if caution_reasons:
             tier = "caution"
             fired.extend(caution_reasons)
@@ -99,15 +137,13 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
         fired.append("listing_identity_mismatch")
 
     if tier is None:
+        no_match = not (ctx.strong_links or ctx.partial_links or ctx.domain_inherited)
         insufficient = []
-        if flags.get("load_failed"):
-            insufficient.append("load_failed")
-        if flags.get("signin_wall"):
-            insufficient.append("signin_wall")
-        if flags.get("cloaking_suspected"):
-            insufficient.append("cloaking")
-        if flags.get("thin_content"):
-            insufficient.append("thin_content")
+        if thin_page and not code_usable and no_match:
+            for k, name in (("load_failed", "load_failed"), ("signin_wall", "signin_wall"),
+                            ("cloaking_suspected", "cloaking"), ("thin_content", "thin_content")):
+                if flags.get(k):
+                    insufficient.append(name)
         if insufficient:
             tier = "insufficient_evidence"
             fired.extend(insufficient)
@@ -115,6 +151,8 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
     if tier is None:
         tier = "no_strong_signals"
         fired.append("no_fraud_behavior_low_score" if score is not None else "no_fraud_behavior_rules_only")
+        if thin_page:
+            fired.append("judged_from_delivered_code")
         if reviewed_legit:
             fired.append("reviewed_legitimate")
 
@@ -124,8 +162,16 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
         present.add("identity_mismatch")
     if ctx.exact_host_label == "fraudulent":
         present.add("reviewed_case_exact_host")
-    if ctx.strong_links:
+    if ctx.domain_inherited:
+        present.add("reviewed_domain")
+    if ctx.kit_strong:
+        present.add("kit_match")
+    elif ctx.kit_partial:
+        present.add("kit_partial")
+    if any(l["relation"] != "same_kit" for l in ctx.strong_links):
         present.add("reviewed_case_link")
+    if code_behaviors or (an.code_mentions and tier in ("high_risk", "caution") and an.code_signals):
+        present.add("code_behavior")
     if tier in ("high_risk", "caution") and above_caution and not behaviors:
         present.add("classifier_score")
     clue_types = [c for c in CLUE_PRIORITY if c in present]
@@ -161,8 +207,21 @@ def clue_text(clue_type: str, an: Analysis, ctx: ReviewedContext, excerpt: str |
     fmt_en = {"amount": amount_en, "listing": an.identity.get("listing_name", ""),
               "claimed": an.identity.get("best_name", ""), "relation": ""}
     fmt_ar = dict(fmt_en, amount=amount_ar)
+    if clue_type == "kit_match" and ctx.kit_strong:
+        fmt_en.update(host=ctx.kit_strong["host"], n=ctx.kit_strong["n_files"])
+        fmt_ar.update(host=ctx.kit_strong["host"], n=ctx.kit_strong["n_files"])
+    if clue_type == "kit_partial" and ctx.kit_partial:
+        fmt_en.update(host=ctx.kit_partial["host"], n=ctx.kit_partial["n_files"])
+        fmt_ar.update(host=ctx.kit_partial["host"], n=ctx.kit_partial["n_files"])
+    if clue_type == "reviewed_domain" and ctx.domain_inherited:
+        fmt_en.update(domain=ctx.domain_inherited["domain"])
+        fmt_ar.update(domain=ctx.domain_inherited["domain"])
+    if clue_type == "code_behavior":
+        en, ar = T.mentions_phrase(an.code_mentions)
+        fmt_en.update(things=en)
+        fmt_ar.update(things=ar)
     if clue_type == "reviewed_case_link" and ctx.strong_links:
-        rel = ctx.strong_links[0]["relation"]
+        rel = next(l for l in ctx.strong_links if l["relation"] != "same_kit")["relation"]
         fmt_en["relation"] = T.RELATION_TEXT.get(rel, {"en": rel})["en"]
         fmt_ar["relation"] = T.RELATION_TEXT.get(rel, {"ar": rel}).get("ar", rel)
     return {"en": tmpl["en"].format(**fmt_en), "ar": tmpl["ar"].format(**fmt_ar)}

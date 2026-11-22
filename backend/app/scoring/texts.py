@@ -136,3 +136,39 @@ NOT_CHECKED = {
     "identity_unclear": {"en": "Whether the listing name matches the site could not be confirmed.",
                          "ar": "لم نتمكن من التأكد من تطابق اسم الإدراج مع الموقع."},
 }
+
+CLUE_TEXT.update({
+    "kit_match": {"en": "This site runs the same software as {host}, a confirmed scam ({n} identical files).",
+                  "ar": "يعمل هذا الموقع بنفس برمجيات {host}، وهو احتيال مؤكد ({n} ملفات متطابقة)."},
+    "kit_partial": {"en": "This site shares {n} distinctive files with {host}, a confirmed scam.",
+                    "ar": "يشترك هذا الموقع في {n} ملفات مميزة مع {host}، وهو احتيال مؤكد."},
+    "reviewed_domain": {"en": "This page is part of {domain}, which a Hami reviewer confirmed as fraudulent.",
+                        "ar": "هذه الصفحة جزء من {domain}، الذي أكد أحد مراجعي حامي أنه احتيالي."},
+    "code_behavior": {"en": "The site's own code (not the visible page) mentions {things}.",
+                      "ar": "تذكر شيفرة الموقع نفسها (وليس الصفحة الظاهرة) {things}."},
+})
+
+RELATION_TEXT.update({
+    "same_kit": {"en": "same software kit", "ar": "نفس البرمجيات"},
+    "shared_infrastructure": {"en": "shared servers (API, CDN, support or payment hosts)",
+                              "ar": "خوادم مشتركة (واجهة برمجية أو شبكة توزيع أو دعم أو دفع)"},
+    "infrastructure_pattern": {"en": "same server naming scheme", "ar": "نفس نمط تسمية الخوادم"},
+})
+
+MENTION_WORDS = {
+    "deposits": ("deposits", "الإيداعات"), "withdrawals": ("withdrawals", "السحوبات"), "vip": ("VIP levels", "مستويات VIP"),
+    "bonuses": ("bonuses", "المكافآت"), "betting": ("betting", "المراهنات"), "invitations": ("invitation codes", "رموز الدعوة"),
+    "commissions": ("commissions", "العمولات"), "tasks": ("paid tasks", "المهام المدفوعة"),
+    "returns": ("guaranteed returns", "العوائد المضمونة"), "card_or_otp": ("card details or one-time codes", "بيانات البطاقة أو رموز التحقق"),
+}
+
+
+def mentions_phrase(mentions: dict[str, int], limit: int = 4) -> tuple[str, str]:
+    top = [k for k, _ in sorted(mentions.items(), key=lambda kv: -kv[1]) if k in MENTION_WORDS][:limit]
+    if not top:
+        return "payment and account features", "ميزات الدفع والحساب"
+    en = [f"{MENTION_WORDS[k][0]} ({mentions[k]}×)" for k in top]
+    ar = [f"{MENTION_WORDS[k][1]} ({mentions[k]}×)" for k in top]
+    en_s = ", ".join(en[:-1]) + (" and " if len(en) > 1 else "") + en[-1]
+    ar_s = "، ".join(ar[:-1]) + (" و" if len(ar) > 1 else "") + ar[-1]
+    return en_s, ar_s

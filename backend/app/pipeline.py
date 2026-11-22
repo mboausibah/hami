@@ -178,7 +178,8 @@ def load_bundle(conn: sqlite3.Connection, scan_id: int) -> tuple[list[tuple[int,
 
 
 def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | None, http_status: int | None,
-                      capture_status: str, stored: bool, t0: float, live_failure: str | None = None) -> None:
+                      capture_status: str, stored: bool, t0: float, live_failure: str | None = None,
+                      asset_source: str = "capture") -> None:
     with db() as conn:
         scan = conn.execute("SELECT * FROM scans WHERE scan_id=?", (scan_id,)).fetchone()
         steps, har, shots, har_id, htmls = load_bundle(conn, source_scan_id)
@@ -188,12 +189,15 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
                             http_status=http_status, listing_name=listing_name)
         an = analyze(inp)
         version, model = current_model()
-        score, phrases = None, []
+        score, phrases, code_score = None, [], None
         thresholds = {"threshold_agree": 0.5, "threshold_caution": 0.35}
         if model is not None and not an.flags.get("load_failed"):
             score = float(model.predict_proba([an.model_text], [an.features])[0])
             phrases = model.explain(an.model_text, an.features, k=5)
             thresholds = {k: model.settings[k] for k in ("threshold_agree", "threshold_caution")}
+        if model is not None and an.code_word_count >= 40:
+            # Same classifier on the site's own code strings (separate score, separate evidence source).
+            code_score = float(model.predict_proba([an.code_text], [an.code_features])[0])
 
         from app.linking import dynamic_common_hosts
 
@@ -208,12 +212,19 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
             analysis_art = put_artifact(conn, scan_id, "analysis", _analysis_record(an, decision, score))
             text_art = put_artifact(conn, scan_id, "model_text", an.model_text or "")
             obs_ids = _insert_observations(conn, scan_id, an, htmls, har_id)
+            from app.linking.kit import store_assets
+
+            store_assets(conn, scan_id, an.page_host or scan["host"], an.assets, asset_source)
             conn.execute(
                 "UPDATE scans SET page_lang=?, fingerprint=?, form_signature=?, payment_signature=? WHERE scan_id=?",
                 (an.lang, json.dumps(an.fingerprint) if an.fingerprint else None, an.form_signature or None,
                  an.payment_signature or None, scan_id))
-        ctx.strong_links = cases.strong_reviewed_links(conn, scan_id, an.page_host or scan["host"], an.asset_hosts, common)
-        decision = decide(an, score, thresholds, ctx, stored=stored)
+        host = an.page_host or scan["host"]
+        kit_ctx = cases.kit_context(conn, scan_id, host, common)
+        ctx.strong_links = cases.strong_reviewed_links(conn, scan_id, host, an.asset_hosts, common) + kit_ctx["strong"]
+        ctx.partial_links = kit_ctx["partial"]
+        ctx.domain_inherited = cases.domain_inheritance(conn, host)
+        decision = decide(an, score, thresholds, ctx, stored=stored, code_score=code_score)
 
         clues = []
         for ct in decision.clue_types:
@@ -231,11 +242,15 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
         with tx(conn):
             conn.execute(
                 "INSERT INTO assessments (scan_id, risk_tier, score, rules_fired, clues_json, identity_check, top_phrases,"
-                " model_version, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                " model_version, created_at, code_score) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (scan_id, decision.tier, score, json.dumps(decision.rules_fired),
                  json.dumps({"clues": clues, "not_checked": not_checked, "headline_key": decision.headline_key,
-                             "strong_links": ctx.strong_links, "live_failure": live_failure}, ensure_ascii=False),
-                 an.identity.get("result", "not_checked"), json.dumps(phrases, ensure_ascii=False), version, utcnow()))
+                             "strong_links": ctx.strong_links, "partial_links": ctx.partial_links,
+                             "domain_inherited": ctx.domain_inherited, "live_failure": live_failure,
+                             "code_mentions": an.code_mentions, "code_behaviors": an.code_behaviors},
+                            ensure_ascii=False),
+                 an.identity.get("result", "not_checked"), json.dumps(phrases, ensure_ascii=False), version, utcnow(),
+                 code_score))
             conn.execute("UPDATE scans SET status='done', completed_at=?, duration_ms=? WHERE scan_id=?",
                          (utcnow(), int((time.monotonic() - t0) * 1000), scan_id))
     _post_scan_hooks(scan_id)
@@ -269,20 +284,22 @@ def _insert_observations(conn: sqlite3.Connection, scan_id: int, an: Analysis, h
             art = htmls.get(ind.step if ind.step is not None else 0) or (htmls.get(0) if htmls else har_id)
         cur = conn.execute(
             "INSERT INTO observations (scan_id, artifact_id, indicator_type, strength, redacted_excerpt, host_ref, "
-            "host_relation, context, site_reported_time, action_step, lang, details_json, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (scan_id, art, ind.type, ind.strength, ind.excerpt or None, ind.host_ref, ind.host_relation, ind.context,
-             ind.site_reported_time, ind.step, ind.lang or None,
-             json.dumps(ind.details, ensure_ascii=False) if ind.details else None, now))
+            "host_relation, context, site_reported_time, action_step, lang, details_json, created_at, source) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (scan_id, har_id if ind.source != "visible_page" else art, ind.type, ind.strength, ind.excerpt or None,
+             ind.host_ref, ind.host_relation, ind.context, ind.site_reported_time, ind.step, ind.lang or None,
+             json.dumps(ind.details, ensure_ascii=False) if ind.details else None, now, ind.source))
         ids.append(cur.lastrowid)
     return ids
 
 
 def _clue_observation(conn: sqlite3.Connection, scan_id: int, clue_type: str) -> sqlite3.Row | None:
-    if clue_type in ("reviewed_case_exact_host", "reviewed_case_link", "classifier_score"):
+    if clue_type in ("reviewed_case_exact_host", "reviewed_case_link", "classifier_score", "kit_match",
+                     "kit_partial", "reviewed_domain"):
         return None
-    return conn.execute("SELECT * FROM observations WHERE scan_id=? AND indicator_type=? ORDER BY obs_id LIMIT 1",
-                        (scan_id, clue_type)).fetchone()
+    source = "delivered_code" if clue_type == "code_behavior" else "visible_page"
+    return conn.execute("SELECT * FROM observations WHERE scan_id=? AND indicator_type=? AND source=? "
+                        "ORDER BY obs_id LIMIT 1", (scan_id, clue_type, source)).fetchone()
 
 
 def _recent_scan(norm: str) -> sqlite3.Row | None:
@@ -352,6 +369,13 @@ def get_scan_payload(scan_id: int, include_internal: bool = False) -> dict[str, 
         "top_phrases": json.loads(a["top_phrases"] or "[]"),
         "assessed_at": a["created_at"],
         "live_failure": extra.get("live_failure"),
+        "code_score": round(a["code_score"], 4) if a["code_score"] is not None else None,
+        "evidence": {
+            "kit_match": next((l for l in extra.get("strong_links", []) if l.get("relation") == "same_kit"), None)
+            or next((l for l in extra.get("partial_links", []) if l.get("relation") == "same_kit"), None),
+            "domain_inherited": extra.get("domain_inherited"),
+            "code_mentions": extra.get("code_mentions") or {},
+        },
     })
     if include_internal:
         payload["strong_links"] = extra.get("strong_links", [])

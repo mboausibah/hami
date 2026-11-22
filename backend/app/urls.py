@@ -7,22 +7,19 @@ import re
 import socket
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import tldextract
+
 # Query parameter names that look like credentials, session handles or personal data.
 TOKEN_PARAM_RE = re.compile(
     r"(token|auth|key|session|sess|sid|sig|signature|password|passwd|pwd|secret|jwt|access|refresh|"
     r"otp|code|email|mail|phone|mobile|tel|ticket|nonce|state|credential|login|user|uid|account|invite)",
     re.I,
 )
-# Multi-label public suffixes we care about (UAE + common). A full PSL is out of scope for the MVP.
-MULTI_SUFFIXES = {
-    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.in", "co.jp", "com.br",
-    "com.cn", "com.hk", "com.sg", "com.tr", "com.sa", "net.sa", "gov.sa", "com.eg", "com.kw", "com.qa",
-    "com.bh", "com.om", "com.jo", "com.lb", "com.pk", "com.my", "co.za", "com.mx", "com.ar",
-    "ae", "co.ae", "com.ae", "net.ae", "org.ae", "gov.ae", "ac.ae", "sch.ae", "mil.ae",
-    "oss-ap-southeast-1.aliyuncs.com", "github.io", "vercel.app", "netlify.app", "pages.dev",
-    "web.app", "firebaseapp.com", "herokuapp.com", "blogspot.com", "wixsite.com",
-}
-
+# Public Suffix List (bundled snapshot, private section included so *.github.io / *.vercel.app sites are
+# separate registrable domains). No network access: suffix_list_urls=() uses the snapshot in the package.
+_PSL = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True)
+# Storage-bucket hosts that the PSL does not list: each bucket is its own "site".
+_BUCKET_RE = re.compile(r"^([a-z0-9-]+\.oss-[a-z0-9-]+\.aliyuncs\.com|[a-z0-9.-]+\.s3[.-][a-z0-9.-]*amazonaws\.com)$")
 
 class UnsafeTarget(ValueError):
     """The URL points at something the capture browser must not visit."""
@@ -71,18 +68,16 @@ def normalize_url(url: str) -> str:
 
 
 def registrable_domain(host: str) -> str:
+    """eTLD+1 via the Public Suffix List; IPs, localhost names and unknown suffixes return the host."""
     host = (host or "").lower().rstrip(".")
-    if not host or _is_ip(host):
-        return host
-    labels = host.split(".")
-    if host.endswith(".localhost") or host == "localhost":
+    if not host or _is_ip(host) or host == "localhost" or host.endswith(".localhost"):
         return host  # test sites: each *.localhost name is its own site
-    for n in (3, 2):
-        if len(labels) > n and ".".join(labels[-n:]) in MULTI_SUFFIXES:
-            return ".".join(labels[-(n + 1):])
-    if len(labels) >= 2 and ".".join(labels[-2:]) in MULTI_SUFFIXES:
-        return ".".join(labels[-3:]) if len(labels) >= 3 else host
-    return ".".join(labels[-2:]) if len(labels) >= 2 else host
+    m = _BUCKET_RE.match(host)
+    if m:
+        return m.group(1)
+    r = _PSL(host)
+    reg = getattr(r, "top_domain_under_public_suffix", None) or r.registered_domain
+    return reg or host
 
 
 def same_site(host_a: str, host_b: str) -> bool:

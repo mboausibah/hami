@@ -1,0 +1,15 @@
+# Files shared by many unrelated sites (frameworks, libraries, analytics). They never count as kit
+# evidence. Additionally, any file seen on a legitimate capture, or on many unrelated sites, is treated
+# as common automatically (see app/linking/kit.py).
+file_name_patterns:
+  - '^jquery([.-][\w.-]*)?\.js$'
+  - '^bootstrap([.-][\w.-]*)?\.(js|css)$'
+  - '^(vue|vuex|vue-router|react|react-dom|preact|angular|zone|axios|lodash|underscore|moment|dayjs)([.-][\w.-]*)?\.js$'
+  - '^(swiper|vant|element-ui|antd|animate|normalize|font-awesome|fontawesome|all\.min|tailwind)([.-][\w.-]*)?\.(js|css)$'
+  - '^(polyfill|polyfills|core-js|regenerator|runtime)([.-][\w.-]*)?\.js$'
+  - '^(canvaskit|skwasm|flutter|flutter_service_worker|main\.dart)\.(js|wasm)$'
+  - '^(gtag|gtm|analytics|ga|fbevents|beacon(\.min)?|hotjar|clarity|sdk\.min)\.js$'
+  - '^(recaptcha__\w+|api|challenge-platform|turnstile)\.js$'
+  - '^(sw|service-worker|workbox-[\w-]+|manifest|favicon)\.(js|json|ico|png|svg)$'
+  - '^(fa-[\w-]+|glyphicons[\w-]*|roboto[\w-]*|inter[\w-]*|open-?sans[\w-]*|noto[\w-]*)\.(woff2?|ttf|otf|eot)$'
+  - '^(logo|icon|loading|spinner|placeholder|default|avatar|close|arrow[\w-]*|back)\.(png|svg|gif|webp)$'

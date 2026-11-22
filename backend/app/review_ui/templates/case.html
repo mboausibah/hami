@@ -35,6 +35,13 @@
       <h3>{{ t('rules') }}</h3>
       <p class="mono">{{ p.rules_fired | join(', ') }}</p>
       {% if p.strong_links %}<h3>Reviewed-case links</h3><p class="mono">{{ p.strong_links }}</p>{% endif %}
+      {% if p.evidence and p.evidence.kit_match %}<h3>Kit match ({{ p.evidence.kit_match.relation if p.evidence.kit_match.relation else 'same_kit' }})</h3>
+        <p class="muted">{{ p.evidence.kit_match.host }} · {{ p.evidence.kit_match.n_files }} files</p>
+        <p class="mono">{{ p.evidence.kit_match.files | join(', ') }}</p>{% endif %}
+      {% if p.evidence and p.evidence.domain_inherited %}<h3>Registrable domain</h3>
+        <p>{{ p.evidence.domain_inherited.domain }} (confirmed: {{ p.evidence.domain_inherited.confirmed_host }})</p>{% endif %}
+      {% if p.evidence and p.evidence.code_mentions %}<h3>Delivered code mentions</h3>
+        <p class="mono">{% for k, v in p.evidence.code_mentions.items() %}{{ k }}×{{ v }} {% endfor %}{% if p.code_score is not none %} · code score {{ '%.3f'|format(p.code_score) }}{% endif %}</p>{% endif %}
       {% if p.top_phrases %}<h3>{{ t('top_phrases') }}</h3>
         <p>{% for ph in p.top_phrases %}<span class="badge t-none">{{ ph.phrase }} {{ ph.weight }}</span> {% endfor %}</p>{% endif %}
     </div>
@@ -101,9 +108,9 @@
 <div class="card">
   <h2>{{ t('observations') }}</h2>
   <table>
-    <tr><th>#</th><th>type</th><th>{{ t('strength') }}</th><th>excerpt / host</th><th>context</th><th>step</th></tr>
+    <tr><th>#</th><th>type</th><th>{{ t('strength') }}</th><th>{{ t('source') }}</th><th>excerpt / host</th><th>context</th><th>step</th></tr>
     {% for o in obs %}
-    <tr><td>{{ o.obs_id }}</td><td>{{ o.indicator_type }}</td><td class="s-{{ o.strength }}">{{ o.strength }}</td>
+    <tr><td>{{ o.obs_id }}</td><td>{{ o.indicator_type }}</td><td class="s-{{ o.strength }}">{{ o.strength }}</td><td class="muted">{{ o.source }}</td>
       <td>{% if o.host_ref %}<span class="mono">{{ defang(o.host_ref) }}</span> <span class="muted">{{ o.host_relation }}</span>{% else %}{{ o.redacted_excerpt or '' }}{% endif %}
         {% if o.site_reported_time %}<span class="muted">site-reported {{ o.site_reported_time }}</span>{% endif %}</td>
       <td class="mono">{{ o.context or '' }}</td><td>{{ o.action_step if o.action_step is not none else '' }}</td></tr>

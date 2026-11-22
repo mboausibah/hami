@@ -28,8 +28,8 @@ def _to_bytes(data: bytes | str | dict | list) -> bytes:
     if isinstance(data, bytes):
         return data
     if isinstance(data, str):
-        return data.encode("utf-8")
-    return json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        return data.encode("utf-8", "replace")
+    return json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8", "replace")
 
 
 def put_artifact(

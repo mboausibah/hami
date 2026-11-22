@@ -53,3 +53,31 @@ def test_sanitize_har_removes_secrets():
 def test_sanitize_html_drops_input_values():
     h = sanitize_html('<input name="user" value="victim@mail.com"><p>call 0501234567</p>')
     assert "victim" not in h and "0501234567" not in h
+
+
+def test_custom_credential_headers_and_strict_mode():
+    from app.sanitize import sanitize_har
+    har = {"log": {"entries": [{
+        "request": {"method": "GET", "url": "https://api.x.test/user/info",
+                    "headers": [{"name": "Authorization-Cid", "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijk"},
+                                {"name": "authorization-visitor", "value": "v-123"}, {"name": "X-Lang", "value": "en"}],
+                    "cookies": []},
+        "response": {"status": 200, "headers": [], "content": {"mimeType": "application/json",
+                     "text": "{\"inviteCode\":\"AB12CD\",\"balance\":\"500.00\",\"nickname\":\"me\",\"vipLevel\":3}"}}},
+        {"request": {"method": "GET", "url": "https://x.test/assets/en-US-Qm7xTz2K.js",
+                     "headers": [{"name": "Cookie", "value": "sid=1"}]},
+         "response": {"status": 200, "headers": [], "content": {"mimeType": "application/javascript",
+                      "text": "export default {deposit:'Deposit'}"}}},
+        {"request": {"method": "GET", "url": "https://x.test/api/me", "headers": [{"name": "token", "value": "t"}]},
+         "response": {"status": 200, "headers": [], "content": {"mimeType": "application/json", "text": "{\"vip\":2}"}},
+         "_webSocketMessages": [{"data": "secret chat"}]},
+    ]}}
+    out = sanitize_har(har, strict=True)
+    s = str(out)
+    for secret in ("eyJhbGci", "v-123", "AB12CD", "500.00", "sid=1", "secret chat"):
+        assert secret not in s, secret
+    e0, e1, e2 = out["log"]["entries"]
+    assert [h["name"] for h in e0["request"]["headers"]] == ["X-Lang"]
+    assert e1["response"]["content"]["text"] and len(e1["response"]["content"]["_hami_sha256"]) == 64  # static kept
+    assert e2["response"]["content"]["text"] is None  # authenticated API response dropped in strict mode
+    assert "_webSocketMessages" not in e2

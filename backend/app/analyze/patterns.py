@@ -16,7 +16,8 @@ def R(p: str) -> re.Pattern:
 # --- money movement ---------------------------------------------------------------------------
 DEPOSIT = R(
     r"\b(recharge|re-charge|top[\s-]?up|deposit|add funds|fund your account)\b"
-    r"|اشحن|ايداع|اودع|تعبئه الرصيد|اعاده الشحن|اضافه رصيد|شحن الرصيد|شحن الحساب"
+    # Arabic "اشحن" alone also means "ship" (postal pages): only balance/account top-ups count.
+    r"|اشحن (رصيد|حساب|محفظ)|ايداع|اودع|تعبئه الرصيد|اعاده الشحن|اضافه رصيد|شحن الرصيد|شحن الحساب"
 )
 UNLOCK = R(
     r"\b(unlock|to activate|activate (your )?(account|tasks|level)|upgrade (your )?(level|vip|account)|"
@@ -25,10 +26,10 @@ UNLOCK = R(
     r"|لفتح|فتح المهام|فتح المستوى|ترقيه|تفعيل الحساب|تفعيل المهام|المستوى \d|مستوى اعلى|مهام اكثر|قبل السحب|لتتمكن من السحب"
 )
 DEPOSIT_TO_UNLOCK = R(
-    r"(recharge|deposit|top[\s-]?up|pay)\b.{0,60}\b(to|and) (unlock|activate|upgrade|access|start|withdraw)"
+    r"(recharge|deposit|top[\s-]?up|pay)\b.{0,60}\b(in order )?to (unlock|activate|upgrade|withdraw)\b"
     r"|(unlock|activate|upgrade)\b.{0,40}\b(by|after) (recharg|deposit|pay)"
-    r"|(اشحن|ايداع|اودع|ادفع|شحن).{0,40}(لفتح|لتفعيل|للترقيه|لتتمكن|للسحب|لبدء)"
-    r"|(لفتح|لتفعيل|للترقيه).{0,40}(اشحن|ايداع|اودع|ادفع|شحن)"
+    r"|(اشحن|ايداع|اودع|ادفع|شحن الرصيد).{0,40}(لفتح|لتفعيل|للترقيه|لتتمكن من السحب|للسحب)"
+    r"|(لفتح|لتفعيل|للترقيه).{0,40}(اشحن|ايداع|اودع|ادفع|شحن الرصيد)"
 )
 ADVANCE_FEE = R(
     r"\b(registration|activation|processing|joining|onboarding|training|interview|guarantee|job|work permit)"
@@ -69,7 +70,7 @@ TASK_EARNING = R(
     r"|مهام يوميه|اكمال المهام|انجاز المهام|عمل جزئي|دوام جزئي|العمل من المنزل|اربح.{0,20}(لكل|يوميا)|مشاهده الفيديوهات|تقييم المنتجات"
 )
 GAMBLING = R(
-    r"\b(casino|slots?|betting|sportsbook|jackpot|roulette|baccarat|poker|blackjack|lottery|bet now|place (a |your )?bet|free spins)\b"
+    r"\b(casino|slot games?|slot machines?|online slots|betting|sportsbook|jackpot|roulette|baccarat|poker|blackjack|lottery|bet now|place (a |your )?bet|free spins|lucky ?spin|spin (the )?wheel)\b"
     r"|كازينو|رهان|مراهنه|مراهنات|قمار|سلوتس|جاكبوت|روليت|يانصيب"
 )
 BONUS = R(r"\b(welcome|first deposit|deposit|signup|sign-up) bonus\b|\b\d{2,3}\s?% bonus\b|مكافاه (الايداع|الترحيب)|بونص")
@@ -89,6 +90,14 @@ BLOCK_PAGE = R(
     r"\b(access denied|attention required|just a moment|verify you are human|checking your browser|"
     r"not available in your (region|country)|request blocked|forbidden|captcha)\b"
 )
+PARCEL_CONTEXT = R(r"\b(parcel|package|shipment|courier|customs|consignment|tracking number|redelivery)\b|طرد|شحنه|الجمارك|رقم التتبع|اعاده التوصيل")
+PARCEL_FEE = R(
+    # A demand to pay to get a held parcel released / redelivered (not general information about duties).
+    r"\bpay\b.{0,40}\bto (release|receive|redeliver|reschedule)\b.{0,25}\b(parcel|package|shipment|order)"
+    r"|\b(parcel|package|shipment)\b.{0,40}\b(on hold|held|suspended|pending|could not be delivered)\b.{0,60}\b(pay|fee|charge)\b"
+    r"|ادفع.{0,30}(لاستلام|لتحرير|لاعاده توصيل) (الطرد|الشحنه)|(الطرد|الشحنه).{0,30}(معلق|محجوز).{0,40}(ادفع|رسوم)"
+)
+
 # Negation cue shortly before a behavior match ("we never ask you to pay to receive tasks").
 NEGATION = R(r"\b(never|not|no|don'?t|doesn'?t|won'?t|will not|without|free of charge|nor)\b|لا |لن |ابدا|ليس |دون |بدون |مجانا")
 NEGATION_WINDOW = 32

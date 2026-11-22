@@ -20,6 +20,8 @@ STRONG_BEHAVIORS = ("deposit_to_unlock", "advance_fee", "commission_transfer")
 OTHER_BEHAVIORS = ("credential_request", "gambling_deposit", "investment_promise")
 MEDIUM_SIGNALS = ("deposit_request", "unlock_condition", "vip_table", "invitation_code", "commission_rate",
                   "withdrawal_condition", "task_earning", "off_platform_contact", "gambling", "fake_shop_discount")
+JOB_NEAR = re.compile(r"\b(job|jobs|position|salary|hiring|vacanc\w*|recruit\w*|employ\w*|candidate|interview|"
+                      r"tasks?|work permit|visa|offer letter)\b|وظيف|توظيف|راتب|شاغر|مهام|مقابله|تاشيره", re.I)
 JOB_CONTEXT = re.compile(r"\b(job|jobs|work|task|tasks|position|salary|hiring|vacanc|recruit|employ|career|"
                          r"part[\s-]?time)\w*|وظيف|عمل|مهام|راتب|توظيف|شاغر", re.I)
 
@@ -45,6 +47,7 @@ class Indicator:
     context: str | None = None
     site_reported_time: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
+    source: str = "visible_page"      # visible_page | delivered_code | asset_name | traffic
 
 
 @dataclass
@@ -73,6 +76,14 @@ class Analysis:
     flags: dict[str, bool] = field(default_factory=dict)
     features: dict[str, float] = field(default_factory=dict)
     site_reported_times: dict[str, int] = field(default_factory=dict)
+    # Delivered files and the site's own code (read, never executed).
+    assets: list[dict[str, Any]] = field(default_factory=list)
+    code_text: str = ""
+    code_word_count: int = 0
+    code_behaviors: list[str] = field(default_factory=list)
+    code_signals: list[str] = field(default_factory=list)
+    code_mentions: dict[str, int] = field(default_factory=dict)
+    code_features: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -117,6 +128,76 @@ def extract_amounts(norm_line: str) -> list[tuple[str, float]]:
             if 0 < val < 10_000_000:
                 out.append((code, val))
     return out
+
+
+def detect_behaviors(norm_lines: list[tuple[int, str, str]], lang: str, source: str,
+                     combine: bool = True) -> tuple[list[Indicator], dict[str, Any]]:
+    """Scam-type agnostic behavior detection over (step, original line, normalized line) tuples. Used for the
+    visible page, the site's delivered code strings and its build file names alike."""
+    out: list[Indicator] = []
+    norm_all = "\n".join(n for _, _, n in norm_lines)
+
+    def first_match(rx: re.Pattern, negatable: bool = True) -> tuple[int, str] | None:
+        for s, orig, norm in norm_lines:
+            for m in rx.finditer(norm):
+                if negatable and P.NEGATION.search(norm[max(0, m.start() - P.NEGATION_WINDOW):m.start()]):
+                    continue
+                return s, orig
+        return None
+
+    def window_match(rx_a: re.Pattern, rx_b: re.Pattern, width: int = 2) -> tuple[int, str] | None:
+        for i, (s, orig, norm) in enumerate(norm_lines):
+            m = rx_a.search(norm)
+            if not m or P.NEGATION.search(norm[max(0, m.start() - P.NEGATION_WINDOW):m.start()]):
+                continue
+            lo, hi = max(0, i - width), min(len(norm_lines), i + width + 1)
+            if any(rx_b.search(norm_lines[j][2]) for j in range(lo, hi)):
+                ctx = " … ".join(norm_lines[j][1] for j in range(max(lo, i - 1), min(hi, i + 2)))
+                return s, ctx
+        return None
+
+    def add(type_: str, strength: str, hit: tuple[int, str] | None, **kw: Any) -> None:
+        if hit is None:
+            return
+        step, orig = hit
+        out.append(Indicator(type=type_, strength=strength, excerpt=_excerpt(orig),
+                                 lang=detect_lang(orig, 3) or lang, step=step, source=source, **kw))
+
+    job_context = bool(JOB_CONTEXT.search(norm_all))
+
+    # ---- behaviors ----------------------------------------------------------------------------
+    dep = first_match(P.DEPOSIT)
+    unl = first_match(P.UNLOCK)
+    add("deposit_request", "medium", dep)
+    add("unlock_condition", "medium", unl)
+    # combine=False (delivered code: unrelated strings in arbitrary order) -> only single-string phrases count.
+    d2u = first_match(P.DEPOSIT_TO_UNLOCK) or (window_match(P.DEPOSIT, P.UNLOCK) if dep and unl and combine else None)
+    add("deposit_to_unlock", "strong", d2u)
+    # The fee and the job/task wording must appear in the same passage (not a fee anywhere + "jobs" in a footer).
+    adv = window_match(P.ADVANCE_FEE, JOB_NEAR, width=1) if first_match(P.ADVANCE_FEE) else None
+    if adv and job_context:
+        add("advance_fee", "strong", adv)
+    elif P.PARCEL_CONTEXT.search(norm_all):
+        adv = first_match(P.PARCEL_FEE)
+        add("advance_fee", "strong", adv)
+    add("commission_transfer", "strong", first_match(P.COMMISSION_TRANSFER))
+    add("commission_rate", "medium", first_match(P.COMMISSION_RATE))
+    vip_levels = set(re.findall(r"(?:vip|level|lv\.?|المستوى|مستوى) ?(\d{1,2})", norm_all))
+    if len(vip_levels) >= 2:
+        add("vip_table", "medium", first_match(P.VIP), details={"levels": sorted(vip_levels, key=int)[:12]})
+    add("invitation_code", "medium", first_match(P.INVITATION))
+    add("withdrawal_condition", "medium", first_match(P.WITHDRAWAL))
+    add("task_earning", "medium", first_match(P.TASK_EARNING))
+    gam = first_match(P.GAMBLING)
+    add("gambling", "medium", gam)
+    if gam and combine and (dep or first_match(P.BONUS)):
+        add("gambling_deposit", "strong", dep or first_match(P.BONUS) or gam)
+    inv = first_match(P.INVESTMENT)
+    add("investment_promise", "strong", inv)
+    add("fake_shop_discount", "medium", first_match(P.FAKE_SHOP))
+    company = first_match(P.COMPANY_DETAILS)
+
+    return out, {"job_context": job_context, "company": company, "dep": dep, "d2u": d2u, "adv": adv}
 
 
 def analyze(inp: AnalyzerInput) -> Analysis:
@@ -166,61 +247,10 @@ def analyze(inp: AnalyzerInput) -> Analysis:
 
     norm_lines = [(s, l, normalize_arabic(l)) for s, l in lines_by_step]
     norm_all = "\n".join(n for _, _, n in norm_lines)
-
-    def first_match(rx: re.Pattern, negatable: bool = True) -> tuple[int, str] | None:
-        for s, orig, norm in norm_lines:
-            for m in rx.finditer(norm):
-                if negatable and P.NEGATION.search(norm[max(0, m.start() - P.NEGATION_WINDOW):m.start()]):
-                    continue
-                return s, orig
-        return None
-
-    def window_match(rx_a: re.Pattern, rx_b: re.Pattern, width: int = 2) -> tuple[int, str] | None:
-        for i, (s, orig, norm) in enumerate(norm_lines):
-            m = rx_a.search(norm)
-            if not m or P.NEGATION.search(norm[max(0, m.start() - P.NEGATION_WINDOW):m.start()]):
-                continue
-            lo, hi = max(0, i - width), min(len(norm_lines), i + width + 1)
-            if any(rx_b.search(norm_lines[j][2]) for j in range(lo, hi)):
-                ctx = " … ".join(norm_lines[j][1] for j in range(max(lo, i - 1), min(hi, i + 2)))
-                return s, ctx
-        return None
-
-    def add(type_: str, strength: str, hit: tuple[int, str] | None, **kw: Any) -> None:
-        if hit is None:
-            return
-        step, orig = hit
-        an.indicators.append(Indicator(type=type_, strength=strength, excerpt=_excerpt(orig),
-                                       lang=detect_lang(orig, 3) or an.lang, step=step, **kw))
-
-    job_context = bool(JOB_CONTEXT.search(norm_all))
-
-    # ---- behaviors ----------------------------------------------------------------------------
-    dep = first_match(P.DEPOSIT)
-    unl = first_match(P.UNLOCK)
-    add("deposit_request", "medium", dep)
-    add("unlock_condition", "medium", unl)
-    d2u = first_match(P.DEPOSIT_TO_UNLOCK) or (window_match(P.DEPOSIT, P.UNLOCK) if dep and unl else None)
-    add("deposit_to_unlock", "strong", d2u)
-    adv = first_match(P.ADVANCE_FEE)
-    if adv and job_context:
-        add("advance_fee", "strong", adv)
-    add("commission_transfer", "strong", first_match(P.COMMISSION_TRANSFER))
-    add("commission_rate", "medium", first_match(P.COMMISSION_RATE))
-    vip_levels = set(re.findall(r"(?:vip|level|lv\.?|المستوى|مستوى) ?(\d{1,2})", norm_all))
-    if len(vip_levels) >= 2:
-        add("vip_table", "medium", first_match(P.VIP), details={"levels": sorted(vip_levels, key=int)[:12]})
-    add("invitation_code", "medium", first_match(P.INVITATION))
-    add("withdrawal_condition", "medium", first_match(P.WITHDRAWAL))
-    add("task_earning", "medium", first_match(P.TASK_EARNING))
-    gam = first_match(P.GAMBLING)
-    add("gambling", "medium", gam)
-    if gam and (dep or first_match(P.BONUS)):
-        add("gambling_deposit", "strong", dep or first_match(P.BONUS) or gam)
-    inv = first_match(P.INVESTMENT)
-    add("investment_promise", "strong", inv)
-    add("fake_shop_discount", "medium", first_match(P.FAKE_SHOP))
-    company = first_match(P.COMPANY_DETAILS)
+    page_inds, ctx_flags = detect_behaviors(norm_lines, an.lang, "visible_page")
+    an.indicators.extend(page_inds)
+    job_context, company, dep, d2u, adv = (ctx_flags["job_context"], ctx_flags["company"], ctx_flags["dep"],
+                                           ctx_flags["d2u"], ctx_flags["adv"])
 
     # ---- amounts ------------------------------------------------------------------------------
     amounts: list[dict[str, Any]] = []
@@ -347,7 +377,78 @@ def analyze(inp: AnalyzerInput) -> Analysis:
     # ---- model text + structured features ---------------------------------------------------------
     an.model_text = normalize_arabic(_strip_hosts(redact_text((title_text + "\n" + all_text)[:60000])))
     an.features = build_features(an, types, kinds)
+    analyze_code(an, inp.har)
     return an
+
+
+# Keyword groups counted in the site's own code (for plain-language clues and code-only behaviors).
+MENTION_GROUPS: dict[str, re.Pattern] = {
+    "deposits": re.compile(r"\b(deposit|deposits|recharge|top ?up|topup)\b|ايداع|شحن", re.I),
+    "withdrawals": re.compile(r"\b(withdraw|withdrawal|withdrawals|cash ?out)\b|سحب", re.I),
+    "vip": re.compile(r"\bvip\d*\b", re.I),
+    "bonuses": re.compile(r"\b(bonus|bonuses|cashback|rebate)\b|مكافاه|بونص", re.I),
+    "betting": re.compile(r"\b(bet|bets|betting|casino|slot games?|slot machines?|jackpot|roulette|baccarat|lucky ?spin|sportsbook)\b"
+                          r"|رهان|كازينو", re.I),
+    "invitations": re.compile(r"\b(invite|invitation|referral|inviter|agent)\b|دعوه|احاله", re.I),
+    "commissions": re.compile(r"\b(commission|commissions)\b|عموله", re.I),
+    "tasks": re.compile(r"\b(task|tasks|grab order|daily orders|mission)\b|مهام|مهمه", re.I),
+    "returns": re.compile(r"\b(daily (profit|income|return)s?|guaranteed (profit|return|income)s?|profit rate)\b"
+                          r"|ارباح (يوميه|مضمونه)|عائد (يومي|مضمون)", re.I),
+    "card_or_otp": re.compile(r"\b(card number|cvv|cvc|otp|one-time password|expiry date)\b|رقم البطاقه|رمز التحقق", re.I),
+}
+
+
+CODE_EXCLUDED_BEHAVIORS = ("credential_request", "advance_fee")
+
+
+def analyze_code(an: Analysis, har: dict | None) -> None:
+    """Fingerprint delivered files and read the site's own code strings (never executed)."""
+    from app.analyze.assets import asset_rows, code_strings, extract_assets
+
+    assets = extract_assets(har)
+    an.assets = asset_rows(assets)
+    strings, names = code_strings(assets)
+    norm_code = [(0, x, normalize_arabic(x)) for x in strings]
+    norm_names = [(0, x, normalize_arabic(x)) for x in names]
+    code_inds, _ = detect_behaviors(norm_code, an.lang, "delivered_code", combine=False)
+    name_inds, _ = detect_behaviors(norm_names, an.lang, "asset_name", combine=False)
+    seen = set()
+    for ind in code_inds + name_inds:
+        if ind.type not in seen:
+            seen.add(ind.type)
+            an.indicators.append(ind)
+    blob = "\n".join(n for _, _, n in norm_code + norm_names)
+    mentions = {k: len(rx.findall(blob)) for k, rx in MENTION_GROUPS.items()}
+    an.code_mentions = {k: v for k, v in mentions.items() if v}
+    behaviors = [b for b in STRONG_BEHAVIORS + OTHER_BEHAVIORS if b in seen]
+    # Combinations of what the code talks about, mapped onto the existing behavior tags.
+    m = mentions
+    # Thresholds need scam-specific vocabulary: legitimate shops, wallets and investment apps also mention
+    # deposits, VIP tiers or returns, but not VIP levels together with paid tasks / invite codes.
+    if m["deposits"] >= 3 and m["betting"] >= 3:
+        behaviors.append("gambling_deposit")
+    if m["deposits"] >= 3 and ((m["vip"] >= 3 and (m["tasks"] >= 2 or m["invitations"] >= 3)) or m["tasks"] >= 3):
+        behaviors.append("deposit_to_unlock")
+    if m["deposits"] >= 2 and m["returns"] >= 2:
+        behaviors.append("investment_promise")
+    # Card/OTP wording and generic "fee" text are normal in legitimate checkout and payment code: only an actual
+    # form on the page counts for those. Code evidence is limited to platform behaviors.
+    an.code_behaviors = [b for b in dict.fromkeys(behaviors) if b not in CODE_EXCLUDED_BEHAVIORS]
+    an.code_signals = [x for x in MEDIUM_SIGNALS if x in seen]
+    if an.code_behaviors:
+        an.indicators.append(Indicator(
+            type="code_behavior", strength="medium", source="delivered_code",
+            excerpt=", ".join(f"{k} x{v}" for k, v in sorted(an.code_mentions.items(), key=lambda kv: -kv[1])[:6]),
+            details={"behaviors": an.code_behaviors, "mentions": an.code_mentions}))
+    an.code_text = normalize_arabic(_strip_hosts(redact_text("\n".join(strings + names))))[:80000]
+    an.code_word_count = len(re.findall(r"\w+", an.code_text))
+    ctypes = seen | set(an.code_behaviors)
+    f = build_features(an, ctypes, set())
+    f["thin_content"] = 0.0
+    f["log_words"] = math.log1p(an.code_word_count) / 10
+    f["company_details"] = 0.0
+    an.code_features = f
+
 
 
 def build_features(an: Analysis, types: set[str], kinds: set[str]) -> dict[str, float]:
