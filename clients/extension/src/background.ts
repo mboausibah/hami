@@ -4,6 +4,7 @@
 import { HamiApi, HamiApiError, SYNC_INTERVAL_MIN, TIER_RANK, hostOf, redactText, stripUrl, t, type HamiAlert, type ScanResult,
          type Tier } from "@hami/shared";
 import type { AlertsData, Request, Response, SnapshotResource } from "./lib/messages";
+import * as investigator from "./lib/investigator";
 import { classify, type Lists } from "./lib/prefilter";
 import { autoCheckActive, getDeviceId, getLists, getSettings, getWatchMap, saveSettings, setWatchMap } from "./lib/settings";
 
@@ -188,6 +189,31 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
         await rememberResult(r, tab?.url ?? page);
       }
       return { ok: true, data: r };
+    }
+    case "investigatorStart": {
+      if (!s.investigatorMode) return { ok: false, error: "investigator mode is off (Options)" };
+      const id = req.tabId ?? tabId;
+      const url = req.url ?? sender.tab?.url;
+      if (id === undefined || !url) return { ok: false, error: "no tab" };
+      const cls = classify(url, await getLists());
+      // Never on sites skipped by the pre-filter (sensitive / well-known); confirmed high-risk sites are allowed.
+      if (cls.skip && !cls.highRisk) return { ok: false, error: `not allowed on this site (${cls.reason})` };
+      await investigator.start(id, url);
+      return { ok: true, data: { recording: true } };
+    }
+    case "investigatorStatus":
+      return { ok: true, data: { recording: investigator.isRecording(req.tabId ?? tabId ?? -1), enabled: s.investigatorMode } };
+    case "investigatorSave": {
+      const id = req.tabId ?? tabId;
+      if (id === undefined || !investigator.isRecording(id)) return { ok: false, error: "this tab is not being recorded" };
+      const saved = await investigator.save(id);
+      const result: Record<string, unknown> = { filename: saved.filename, sha256: saved.sha256, entries: saved.entries };
+      if (req.upload ?? s.evidenceUpload) {
+        const up = await (await api()).uploadEvidence({ page_url: saved.pageUrl, har_text: saved.harText,
+                                                        client_sha256: saved.sha256, entries: saved.entries });
+        result.uploaded = { evidence_id: up.evidence_id, scan_id: up.scan_id, tier: up.tier, hash_match: up.hash_match };
+      }
+      return { ok: true, data: result };
     }
     case "consent": {
       const next = await saveSettings(req.agree ? { autoCheck: true, consentAt: new Date().toISOString() }

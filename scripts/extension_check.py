@@ -13,6 +13,9 @@ sync (no server call), Search shields on an original Google-like fixture served 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import shutil
 import sys
 import tempfile
 import time
@@ -51,10 +54,17 @@ def main() -> int:
     print(f"local API {api}; screenshots -> {shots}")
     try:
         with sync_playwright() as p:
+            # Test copy of the build: investigator mode's optional permissions (debugger, downloads) are granted up
+            # front because Chrome's permission prompt cannot be clicked under automation. Same code otherwise.
+            test_dist = Path(tmp) / "ext"
+            shutil.copytree(DIST, test_dist)
+            man = json.loads((test_dist / "manifest.json").read_text(encoding="utf-8"))
+            man["permissions"] = man["permissions"] + man.pop("optional_permissions", [])
+            (test_dist / "manifest.json").write_text(json.dumps(man), encoding="utf-8")
             ctx = p.chromium.launch_persistent_context(
                 str(Path(tmp) / "chrome-profile"), channel="chromium", headless=not args.headed,
-                args=[f"--disable-extensions-except={DIST}", f"--load-extension={DIST}"],
-                viewport={"width": 1280, "height": 860})
+                args=[f"--disable-extensions-except={test_dist}", f"--load-extension={test_dist}"],
+                viewport={"width": 1280, "height": 860}, accept_downloads=True)
             sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
             ext_id = sw.url.split("/")[2]
             base = f"chrome-extension://{ext_id}"
@@ -213,6 +223,42 @@ def main() -> int:
             else:
                 check("snapshot stored as a HAR-format artifact (metadata) with SHA-256", False, "no snapshot scan")
             d_page.close()
+
+            # PART 4: investigator mode - full HAR via chrome.debugger, sanitized on the device, saved after 10 s idle.
+            sw.evaluate("() => chrome.storage.sync.set({investigatorMode: true, evidenceUpload: true})")
+            ctx.add_cookies([{"name": "sid", "value": "COOKIESECRET", "domain": "site-a.localhost", "path": "/"}])
+            inv = ctx.new_page()
+            inv.goto(site("site-a"))
+            inv.bring_to_front()
+            tab_id = sw.evaluate("async () => (await chrome.tabs.query({active: true, lastFocusedWindow: true}))[0].id")
+            opts2 = ctx.new_page()
+            opts2.goto(f"{base}/options/options.html")
+            with inv.expect_navigation(timeout=20000):  # recording reloads the tab to capture the full page load
+                started = opts2.evaluate("t => new Promise(r => chrome.runtime.sendMessage({type: 'investigatorStart', tabId: t[0], url: t[1]}, r))",
+                                         [tab_id, site("site-a")])
+            check("investigator recording starts on a candidate site", started.get("ok") is True, str(started))
+            refused = opts2.evaluate("t => new Promise(r => chrome.runtime.sendMessage({type: 'investigatorStart', tabId: t, url: 'https://www.mashreq.com/'}, r))",
+                                     tab_id)
+            check("investigator mode never runs on a skipped (banking) site", refused.get("ok") is False, refused.get("error", ""))
+            inv.evaluate("window.__ev = new Promise(r => { document.addEventListener('hami-evidence', e => r(e.detail));"
+                         " setTimeout(() => r(null), 45000); })")
+            inv.evaluate("fetch('/api/countries.json?token=TOKENSECRET&lang=en').then(r => r.text())")
+            saved = inv.evaluate("window.__ev")
+            check("evidence saved automatically after 10 s idle", bool(saved and saved.get("sha256")), str(saved)[:120])
+            if saved and saved.get("sha256"):
+                path = sw.evaluate("async () => { const d = await chrome.downloads.search({orderBy: ['-startTime'], limit: 1,"
+                                   " state: 'complete'}); return d.length ? d[0].filename : null; }")
+                text = Path(path).read_text(encoding="utf-8") if path and Path(path).is_file() else ""
+                check("downloaded .har is sanitized (no cookie, no token)", text != "" and "COOKIESECRET" not in text
+                      and "TOKENSECRET" not in text and '"name": "Cookie"' not in text and "countries.json" in text,
+                      f"{len(text)} bytes")
+                check("SHA-256 of the downloaded file matches the reported hash",
+                      hashlib.sha256(text.encode("utf-8")).hexdigest() == saved["sha256"])
+                up = saved.get("uploaded") or {}
+                check("uploaded as evidence with matching hashes", bool(up.get("evidence_id")) and up.get("hash_match") is True,
+                      str(up))
+            opts2.close()
+            inv.close()
 
             # Search shields on an original Google-like fixture (request interception; Google is not contacted).
             c.post("/scans", json={"url": site("site-c"), "source_type": "manual"})  # make Site C known to the server

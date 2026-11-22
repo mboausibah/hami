@@ -21,6 +21,16 @@ async function init(): Promise<void> {
   $<HTMLInputElement>("localList").checked = s.localList;
   $<HTMLInputElement>("checkSearchResults").checked = s.checkSearchResults;
   $<HTMLInputElement>("autoCheck").checked = s.autoCheck;
+  $<HTMLInputElement>("investigatorMode").checked = s.investigatorMode;
+  $<HTMLInputElement>("evidenceUpload").checked = s.evidenceUpload;
+  $("investigatorMode").addEventListener("change", async (ev) => {
+    const box = ev.target as HTMLInputElement;
+    if (box.checked) {
+      // Optional permissions, requested only when an investigator turns this on.
+      const granted = await chrome.permissions.request({ permissions: ["debugger", "downloads"] });
+      if (!granted) box.checked = false;
+    }
+  });
   showList(await getLocalList());
 
   $("lang").addEventListener("change", () => applyLang($<HTMLSelectElement>("lang").value as Lang));
@@ -57,6 +67,8 @@ async function init(): Promise<void> {
       checkSearchResults: $<HTMLInputElement>("checkSearchResults").checked,
       // Turning automatic checking on requires the consent screen; turning it off withdraws consent.
       autoCheck: wantAuto && !!before.consentAt,
+      investigatorMode: $<HTMLInputElement>("investigatorMode").checked,
+      evidenceUpload: $<HTMLInputElement>("investigatorMode").checked && $<HTMLInputElement>("evidenceUpload").checked,
       consentAt: wantAuto ? before.consentAt : null,
     });
     if (wantAuto && !before.consentAt) await chrome.tabs.create({ url: chrome.runtime.getURL("consent/consent.html") });

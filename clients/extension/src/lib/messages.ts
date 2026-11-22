@@ -32,7 +32,10 @@ export type Request =
   | { type: "classify"; url: string; resourceNames?: string[] }
   | { type: "autoCheck"; url: string; reasons: string[] }
   | { type: "consent"; agree: boolean }
-  | { type: "snapshot"; payload: SnapshotPayload };
+  | { type: "snapshot"; payload: SnapshotPayload }
+  | { type: "investigatorStart"; tabId?: number; url?: string }
+  | { type: "investigatorSave"; tabId?: number; upload?: boolean }
+  | { type: "investigatorStatus"; tabId?: number };
 
 export type Response<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 

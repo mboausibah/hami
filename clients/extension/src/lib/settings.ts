@@ -16,6 +16,8 @@ export interface Settings {
   idleSnapshots: boolean;
   /** Investigator mode: full HAR of the current tab via chrome.debugger. Off by default. */
   investigatorMode: boolean;
+  /** Upload saved evidence HAR files to the Hami server (in addition to downloading them). Off by default. */
+  evidenceUpload: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -27,6 +29,7 @@ export const DEFAULTS: Settings = {
   consentAt: null,
   idleSnapshots: true,
   investigatorMode: false,
+  evidenceUpload: false,
 };
 
 export async function getSettings(): Promise<Settings> {

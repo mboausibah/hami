@@ -29,3 +29,4 @@ button.link { background: none; border: 0; color: var(--brand); cursor: pointer;
 .watch-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 h3 { font-size: 12px; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
 .empty { color: var(--muted); font-size: 13px; }
+.investigator { border: 1px dashed #cfd6df; border-radius: 8px; padding: 8px; margin: 8px 0; }

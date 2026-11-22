@@ -71,3 +71,30 @@ def test_snapshot_validation(env):
     assert client.post("/snapshots", json={"page_url": "file:///etc/passwd", "device_id": dev}).status_code == 400
     assert client.post("/snapshots", json={"page_url": "https://x.test/", "device_id": dev, "scan_id": 1, "k": "bad"},
                        headers={"X-Device-Id": dev}).status_code == 403
+
+
+def test_evidence_upload_hash_and_sanitize(env):
+    import hashlib
+
+    client, site = env
+    dev = str(uuid.uuid4())
+    har = {"log": {"version": "1.2", "creator": {"name": "t", "version": "1"}, "entries": [{
+        "startedDateTime": "2026-11-22T10:00:00Z", "time": 5,
+        "request": {"method": "GET", "url": site("site-d") + "?token=LEFTOVER", "cookies": [], "queryString": [],
+                    "headers": [{"name": "Authorization-Cid", "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.zzzzzzzzzz"}]},
+        "response": {"status": 200, "headers": [], "cookies": [], "content": {"mimeType": "text/html",
+                     "text": "<html><body><h1>Quorvia</h1><p>mail me@example.com</p></body></html>"}}}]}}
+    text = json.dumps(har)
+    good = hashlib.sha256(text.encode()).hexdigest()
+    r = client.post("/evidence", json={"page_url": site("site-d"), "har_text": text, "client_sha256": good,
+                                       "entries": 1, "device_id": dev}, headers={"X-Device-Id": dev})
+    assert r.status_code == 200, r.text
+    p = r.json()
+    assert p["hash_match"] is True and p["evidence_id"] and len(p["stored_artifact_sha256"]) == 64
+    with db() as conn:
+        art = conn.execute("SELECT path FROM artifacts WHERE scan_id=? AND kind='har'", (p["scan_id"],)).fetchone()
+    stored = read_artifact(art["path"]).decode()
+    assert "LEFTOVER" not in stored and "eyJhbGci" not in stored and "me@example.com" not in stored
+    bad = client.post("/evidence", json={"page_url": site("site-d"), "har_text": text, "client_sha256": "0" * 64,
+                                         "entries": 1, "device_id": dev}, headers={"X-Device-Id": dev}).json()
+    assert bad["hash_match"] is False

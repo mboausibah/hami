@@ -137,7 +137,27 @@ function watchIdle(lang: Lang): void {
   reset();
 }
 
+/** Investigator mode: save the recording after 10 s without activity. */
+async function investigatorIdleSave(): Promise<void> {
+  const st = await send<{ recording: boolean }>({ type: "investigatorStatus" });
+  if (!st.ok || !st.data.recording) return;
+  let timer = 0;
+  const events = ["mousemove", "mousedown", "keydown", "scroll", "wheel", "touchstart"];
+  const fire = (): void => {
+    events.forEach((ev) => window.removeEventListener(ev, reset, true));
+    void send({ type: "investigatorSave" }).then((r) =>
+      document.dispatchEvent(new CustomEvent("hami-evidence", { detail: r.ok ? r.data : { error: r.error } })));
+  };
+  const reset = (): void => {
+    clearTimeout(timer);
+    timer = window.setTimeout(fire, IDLE_MS);
+  };
+  events.forEach((ev) => window.addEventListener(ev, reset, { capture: true, passive: true }));
+  reset();
+}
+
 async function main(): Promise<void> {
+  void investigatorIdleSave();
   const s = await getSettings();
   const lang = s.lang;
   const cls = await send<ClassifyData>({ type: "classify", url: location.href, resourceNames: resourceNames() });

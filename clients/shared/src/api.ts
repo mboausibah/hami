@@ -117,6 +117,12 @@ export class HamiApi {
     return this.request("POST", "/snapshots", { ...body, device_id: this.deviceId }, 60_000);
   }
 
+  /** Investigator evidence: a HAR already sanitized on the device, with the SHA-256 computed there. */
+  uploadEvidence(body: { page_url: string; har_text: string; client_sha256: string; entries: number; scan_id?: number; k?: string }):
+    Promise<ScanResult & { evidence_id: number; client_sha256: string; server_sha256: string; hash_match: boolean }> {
+    return this.request("POST", "/evidence", { ...body, device_id: this.deviceId }, 120_000);
+  }
+
   health(): Promise<Health> {
     return this.request("GET", "/health", undefined, 8_000);
   }

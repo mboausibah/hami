@@ -38,6 +38,34 @@ async function init(): Promise<void> {
     if (cached && Date.now() - cached.at < 30 * 60_000) await render(cached.result);
   }
   void loadUpdates(false);
+  if (tab?.id !== undefined) void setupInvestigator(tab.id, tab.url ?? "");
+}
+
+async function setupInvestigator(tabId: number, url: string): Promise<void> {
+  const st = await send<{ recording: boolean; enabled: boolean }>({ type: "investigatorStatus", tabId });
+  if (!st.ok || !st.data.enabled || !isCheckableUrl(url)) return;
+  $("investigator").hidden = false;
+  const startBtn = $("inv-start");
+  const saveBtn = $("inv-save");
+  const status = $("inv-status");
+  const show = (recording: boolean): void => {
+    startBtn.hidden = recording;
+    saveBtn.hidden = !recording;
+    status.textContent = recording ? t("investigatorRecording", lang) : "";
+  };
+  show(st.data.recording);
+  startBtn.addEventListener("click", async () => {
+    const r = await send({ type: "investigatorStart", tabId, url });
+    if (r.ok) show(true);
+    else status.textContent = r.error;
+  });
+  saveBtn.addEventListener("click", async () => {
+    const r = await send<{ filename: string; sha256: string; entries: number; uploaded?: { evidence_id: number } }>(
+      { type: "investigatorSave", tabId });
+    show(false);
+    status.textContent = r.ok ? `${t("investigatorSaved", lang)} ${r.data.filename} · SHA-256 ${r.data.sha256.slice(0, 16)}…` +
+      (r.data.uploaded ? ` · ${t("investigatorUploaded", lang)} #${r.data.uploaded.evidence_id}` : "") : r.error;
+  });
 }
 
 /** On a Google Maps business panel, check the business website with the listing name (activeTab + scripting). */

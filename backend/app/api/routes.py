@@ -185,6 +185,35 @@ async def create_snapshot(body: SnapshotIn) -> dict:
         raise HTTPException(400, str(e)) from e
 
 
+class EvidenceIn(BaseModel):
+    page_url: str = Field(..., max_length=2048)
+    har_text: str
+    client_sha256: str = Field(..., min_length=64, max_length=64)
+    entries: int = 0
+    device_id: str = Field(..., max_length=64)
+    scan_id: int | None = None
+    k: str | None = None
+
+
+@router.post("/evidence", dependencies=[Depends(rate_limit("snapshots"))])
+async def upload_evidence(body: EvidenceIn) -> dict:
+    """Investigator-mode HAR (sanitized on the device), with the device-side SHA-256 verified here."""
+    from app.evidence import EvidenceError, ingest
+
+    valid_device_id(body.device_id)
+    linked = None
+    if body.scan_id is not None:
+        with db() as conn:
+            row = conn.execute("SELECT access_key FROM scans WHERE scan_id=?", (body.scan_id,)).fetchone()
+        if row is None or body.k != row["access_key"]:
+            raise HTTPException(403, "scan key required to link evidence")
+        linked = body.scan_id
+    try:
+        return await run_in_threadpool(ingest, body.page_url, body.har_text, body.client_sha256, body.entries, linked)
+    except EvidenceError as e:
+        raise HTTPException(413 if "too large" in str(e) else 400, str(e)) from e
+
+
 @router.get("/indicators/local-lists", dependencies=[Depends(rate_limit("default"))])
 def local_lists() -> dict:
     """Everything the extension needs to decide on the device, without a server call per page:

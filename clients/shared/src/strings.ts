@@ -84,6 +84,25 @@ export const STRINGS = {
     en: "Needs your consent (shown once). Well-known, banking, government, e-mail and health sites are skipped on your device. For other pages the address is sent for a check, and after 10 seconds without activity a list of loaded files and servers (no query strings) plus the visible text. No cookies, form values or page contents from your browser.",
     ar: "يتطلب موافقتك (تظهر مرة واحدة). يتم تخطي المواقع المعروفة ومواقع البنوك والحكومة والبريد والصحة على جهازك. للصفحات الأخرى يُرسل العنوان للفحص، وبعد ١٠ ثوانٍ دون نشاط قائمة بالملفات والخوادم المحمّلة (دون معاملات الاستعلام) مع النص الظاهر. لا تُرسل ملفات تعريف الارتباط أو قيم النماذج أو محتوى الصفحات من متصفحك.",
   },
+  investigatorTitle: { en: "Investigator mode", ar: "وضع المحقق" },
+  investigatorHelp: {
+    en: "Records a full HAR of this tab. Chrome shows a \"being debugged\" bar while recording. Saved after 10 seconds without activity, or now.",
+    ar: "يسجل ملف HAR كاملًا لهذا التبويب. يعرض Chrome شريط \"يتم تصحيح الأخطاء\" أثناء التسجيل. يُحفظ بعد ١٠ ثوانٍ دون نشاط أو فورًا.",
+  },
+  investigatorOptionsHelp: {
+    en: "For reviewers and investigators. Records a full HAR of the current tab with Chrome's debugger (Chrome shows a \"being debugged\" bar). Cookies, credential headers, tokens, request bodies, phone numbers and e-mails are removed on this device before the file is saved. Never runs on banking, government, e-mail, health or well-known sites. Asks Chrome for the debugger and downloads permissions.",
+    ar: "للمراجعين والمحققين. يسجل ملف HAR كاملًا للتبويب الحالي عبر أداة تصحيح Chrome (يظهر شريط \"يتم تصحيح الأخطاء\"). تُحذف ملفات تعريف الارتباط وترويسات الاعتماد والرموز ومحتوى الطلبات وأرقام الهاتف والبريد على هذا الجهاز قبل حفظ الملف. لا يعمل أبدًا على مواقع البنوك أو الحكومة أو البريد أو الصحة أو المواقع المعروفة. يطلب من Chrome صلاحيتي التصحيح والتنزيل.",
+  },
+  investigatorRecord: { en: "Record this tab (full HAR)", ar: "سجّل هذا التبويب (HAR كامل)" },
+  investigatorSave: { en: "Save evidence", ar: "احفظ الدليل" },
+  investigatorRecording: { en: "Recording… Chrome shows a \"being debugged\" bar.", ar: "جارٍ التسجيل… يظهر شريط \"يتم تصحيح الأخطاء\" في Chrome." },
+  investigatorSaved: { en: "Saved", ar: "تم الحفظ" },
+  investigatorUploaded: { en: "uploaded as evidence", ar: "تم رفعه كدليل" },
+  evidenceUpload: { en: "Also upload saved evidence to the Hami server", ar: "ارفع الأدلة المحفوظة أيضًا إلى خادم حامي" },
+  evidenceUploadHelp: {
+    en: "Sends the sanitized HAR with its SHA-256 hash to the Hami server as evidence for review. Off by default.",
+    ar: "يرسل ملف HAR بعد التنقية مع بصمة SHA-256 إلى خادم حامي كدليل للمراجعة. معطل افتراضيًا.",
+  },
   privacyNote: {
     en: "Hami never sends your browsing history or search queries. Checks are sent only when you ask, or for job-like pages if you turn on auto-check.",
     ar: "لا يرسل حامي سجل تصفحك أو عبارات البحث. تُرسل الفحوصات فقط عندما تطلب ذلك، أو لصفحات الوظائف إذا فعّلت الفحص التلقائي.",
