@@ -131,8 +131,8 @@ def _har_candidates(conn, an, ref: str, kit: str, register: bool) -> int:
         now = utcnow()
         for h in hosts:
             conn.execute(
-                "INSERT OR IGNORE INTO discovered_domains (domain, source, first_seen_at, matched_pattern, evidence, status, "
-                "status_note, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO discovered_domains (domain, source, first_seen_at, matched_pattern, evidence, status, "
+                "status_note, updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
                 (h, "har_reference", now, f"har_reference:{kit}",
                  json.dumps({"file": ref, "relation": "registration destination referenced in captured JSON",
                              "reachability": "not verified"}),

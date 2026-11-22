@@ -156,8 +156,8 @@ def enqueue(candidates: Iterable[Candidate], cfg: dict[str, Any]) -> int:
             if not pname:
                 continue
             cur = conn.execute(
-                "INSERT OR IGNORE INTO discovered_domains (domain, source, cert_seen_at, first_seen_at, matched_pattern, "
-                "evidence, status, updated_at) VALUES (?,?,?,?,?,?, 'queued', ?)",
+                "INSERT INTO discovered_domains (domain, source, cert_seen_at, first_seen_at, matched_pattern, "
+                "evidence, status, updated_at) VALUES (?,?,?,?,?,?, 'queued', ?) ON CONFLICT DO NOTHING",
                 (c.domain, "ct", c.cert_seen_at, now, pname, json.dumps({"source": c.source_detail}), now))
             if cur.rowcount:
                 added += 1

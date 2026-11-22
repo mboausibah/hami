@@ -13,7 +13,7 @@ BE   := cd backend &&
 export PYTHONUTF8=1
 
 .PHONY: help venv deps db run api testsites corpus import import-sessions tier-check capture-labels capture-legit capture-har-candidates \
-        capture-live train train-synthetic eval eval-live promote discovery discovery-once static-check test e2e \
+        capture-live train train-synthetic eval eval-live promote discovery discovery-once static-check test test-postgres e2e \
         clients extension check docker-up docker-down clean-storage
 
 help:
@@ -102,6 +102,10 @@ static-check: deps
 
 test: deps
 	$(BE) $(PY) -m pytest -q tests
+
+# Same suite against PostgreSQL:  make test-postgres PG_URL=postgresql+psycopg://user:pw@host:5432/empty_db
+test-postgres: deps
+	$(BE) DATABASE_URL="$(PG_URL)" $(PY) -m pytest -q tests
 
 e2e: deps
 	$(PY) scripts/e2e_check.py --start-local

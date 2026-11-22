@@ -227,9 +227,12 @@ def local_lists() -> dict:
         hosts, version = cases.high_risk_hosts(conn)
         names = [h["host"] for h in hosts]
         domains = sorted({registrable_domain(h) for h in names if "." in registrable_domain(h)})
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%S")
         recent = [r[0] for r in conn.execute(
-            "SELECT domain FROM discovered_domains WHERE source='ct' AND first_seen_at >= datetime('now', '-14 days') "
-            "ORDER BY first_seen_at DESC LIMIT 2000")]
+            "SELECT domain FROM discovered_domains WHERE source='ct' AND first_seen_at >= ? "
+            "ORDER BY first_seen_at DESC LIMIT 2000", (cutoff,))]
         fraud_sites = sorted({registrable_domain(s["host"]) for s in cases.reviewed_fraud_scans(conn)})
         kit_files: list[str] = []
         if fraud_sites:

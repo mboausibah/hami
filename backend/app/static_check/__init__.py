@@ -107,8 +107,8 @@ def scan_roots(roots: list[Path], host: str | None = None, store: bool = True) -
                 with db() as conn:
                     for f in file_findings:
                         conn.execute(
-                            "INSERT OR IGNORE INTO static_findings (category, rule, file_path, line, col, related_host, "
-                            "detected_at) VALUES (?,?,?,?,?,?,?)",
+                            "INSERT INTO static_findings (category, rule, file_path, line, col, related_host, "
+                            "detected_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
                             (f.category, f.rule, f.file_path, f.line, f.col, related, utcnow()))
     return findings
 

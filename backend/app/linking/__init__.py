@@ -218,8 +218,8 @@ def _pending_alerts_for_link(conn: sqlite3.Connection, link_id: int) -> list[int
         reason_ar = (f"تم العثور على موقع مرتبط ({defang(related_host)}) بالموقع الذي تتابعه عبر {rel['ar']}. {far} لا تدفع.")
         with tx(conn):
             cur = conn.execute(
-                "INSERT OR IGNORE INTO alerts (link_id, watched_host, watched_scan_id, related_scan_id, reason_en, reason_ar,"
-                " status, created_at) VALUES (?,?,?,?,?,?, 'pending', ?)",
+                "INSERT INTO alerts (link_id, watched_host, watched_scan_id, related_scan_id, reason_en, reason_ar,"
+                " status, created_at) VALUES (?,?,?,?,?,?, 'pending', ?) ON CONFLICT DO NOTHING",
                 (link_id, watched_host, watched_scan, related_scan, reason_en, reason_ar, utcnow()))
         if cur.rowcount:
             out.append(cur.lastrowid)
