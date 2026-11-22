@@ -1,0 +1,252 @@
+{
+  "version": "m20261122-144633-full",
+  "kind": "full",
+  "created_at": "2026-11-22T14:46:34.248996Z",
+  "dataset_version": "ds-20261122-144633-full",
+  "dataset_hash": "01e8c974b2edc086e86e1aa0a84874116a05687fab58f90f9c7f93abdb372066",
+  "dataset_info": {
+    "kind": "full",
+    "counts": {
+      "fraudulent": 139,
+      "legitimate": 112,
+      "inconclusive": 12
+    },
+    "sources": {
+      "private_file": 1,
+      "synthetic": 262
+    }
+  },
+  "feature_settings": {
+    "word_ngram_range": [
+      1,
+      2
+    ],
+    "char_ngram_range": [
+      3,
+      5
+    ],
+    "word_max_features": 40000,
+    "char_max_features": 80000,
+    "struct_weight": 1.5,
+    "C": 4.0,
+    "class_weight": "balanced",
+    "calibration": "sigmoid",
+    "threshold_agree": 0.5,
+    "threshold_caution": 0.35,
+    "struct_features": [
+      "deposit_request",
+      "unlock_condition",
+      "deposit_to_unlock",
+      "advance_fee",
+      "commission_transfer",
+      "commission_rate",
+      "vip_table",
+      "invitation_code",
+      "withdrawal_condition",
+      "task_earning",
+      "messaging_link",
+      "off_platform_contact",
+      "gambling",
+      "gambling_deposit",
+      "investment_promise",
+      "fake_shop_discount",
+      "field_card",
+      "field_cvv",
+      "field_otp",
+      "field_bank_password",
+      "field_password",
+      "has_aed_amount",
+      "log_amounts",
+      "log_fields",
+      "thin_content",
+      "registration_destinations",
+      "company_details",
+      "log_words"
+    ]
+  },
+  "promotion": {
+    "current": null,
+    "candidate_metrics": {
+      "n": 128,
+      "n_fraudulent": 72,
+      "n_legitimate": 56,
+      "tp": 62,
+      "fp": 0,
+      "fn": 10,
+      "tn": 56,
+      "precision": 1.0,
+      "recall": 0.8611,
+      "fpr_legit": 0.0,
+      "pr_auc": 1.0
+    },
+    "promoted": true,
+    "reason": "no current model"
+  },
+  "top_phrases": {
+    "fraudulent": [
+      {
+        "phrase": "indicator:off_platform_contact",
+        "weight": 1.676
+      },
+      {
+        "phrase": "indicator:messaging_link",
+        "weight": 1.676
+      },
+      {
+        "phrase": "indicator:deposit_request",
+        "weight": 0.606
+      },
+      {
+        "phrase": "indicator:fake_shop_discount",
+        "weight": 0.384
+      },
+      {
+        "phrase": "indicator:commission_rate",
+        "weight": 0.266
+      },
+      {
+        "phrase": "indicator:commission_transfer",
+        "weight": 0.266
+      },
+      {
+        "phrase": "indicator:vip_table",
+        "weight": 0.226
+      },
+      {
+        "phrase": "indicator:deposit_to_unlock",
+        "weight": 0.226
+      },
+      {
+        "phrase": "indicator:unlock_condition",
+        "weight": 0.226
+      },
+      {
+        "phrase": "indicator:withdrawal_condition",
+        "weight": 0.224
+      },
+      {
+        "phrase": "indicator:thin_content",
+        "weight": 0.214
+      },
+      {
+        "phrase": "indicator:investment_promise",
+        "weight": 0.19
+      },
+      {
+        "phrase": "indicator:gambling_deposit",
+        "weight": 0.19
+      },
+      {
+        "phrase": "indicator:gambling",
+        "weight": 0.19
+      },
+      {
+        "phrase": "indicator:log_fields",
+        "weight": 0.148
+      },
+      {
+        "phrase": "indicator:field_password",
+        "weight": 0.09
+      },
+      {
+        "phrase": "indicator:advance_fee",
+        "weight": 0.073
+      },
+      {
+        "phrase": "درهم",
+        "weight": 0.066
+      },
+      {
+        "phrase": "للتوظيف",
+        "weight": 0.052
+      },
+      {
+        "phrase": "whatsapp",
+        "weight": 0.047
+      }
+    ],
+    "legitimate": [
+      {
+        "phrase": "indicator:company_details",
+        "weight": -2.333
+      },
+      {
+        "phrase": "indicator:task_earning",
+        "weight": -0.425
+      },
+      {
+        "phrase": "indicator:log_words",
+        "weight": -0.358
+      },
+      {
+        "phrase": "indicator:has_aed_amount",
+        "weight": -0.173
+      },
+      {
+        "phrase": "indicator:invitation_code",
+        "weight": -0.122
+      },
+      {
+        "phrase": "2026",
+        "weight": -0.068
+      },
+      {
+        "phrase": "and",
+        "weight": -0.055
+      },
+      {
+        "phrase": "2026 جميع",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الحقوق",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الحقوق محفوظه",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الخصوصيه",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الخصوصيه الشروط",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الرييسي",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الشروط",
+        "weight": -0.052
+      },
+      {
+        "phrase": "الشروط والاحكام",
+        "weight": -0.052
+      },
+      {
+        "phrase": "المقر",
+        "weight": -0.052
+      },
+      {
+        "phrase": "المقر الرييسي",
+        "weight": -0.052
+      },
+      {
+        "phrase": "تجاريه",
+        "weight": -0.052
+      },
+      {
+        "phrase": "جميع",
+        "weight": -0.052
+      },
+      {
+        "phrase": "جميع الحقوق",
+        "weight": -0.052
+      }
+    ]
+  },
+  "train_seconds": 0.5
+}

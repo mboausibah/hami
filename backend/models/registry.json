@@ -1,0 +1,17 @@
+{
+  "current": "m20261122-144751-synthetic",
+  "versions": [
+    {
+      "version": "m20261122-144633-full",
+      "status": "retired",
+      "dataset_hash": "01e8c974b2edc086e86e1aa0a84874116a05687fab58f90f9c7f93abdb372066",
+      "created_at": "2026-11-22T14:46:34.248996Z"
+    },
+    {
+      "version": "m20261122-144751-synthetic",
+      "status": "current",
+      "dataset_hash": "01e8c974b2edc086e86e1aa0a84874116a05687fab58f90f9c7f93abdb372066",
+      "created_at": "2026-11-22T14:47:52.419445Z"
+    }
+  ]
+}

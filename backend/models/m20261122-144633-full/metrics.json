@@ -1,0 +1,164 @@
+{
+  "held_out": {
+    "overall": {
+      "n": 128,
+      "n_fraudulent": 72,
+      "n_legitimate": 56,
+      "tp": 62,
+      "fp": 0,
+      "fn": 10,
+      "tn": 56,
+      "precision": 1.0,
+      "recall": 0.8611,
+      "fpr_legit": 0.0,
+      "pr_auc": 1.0
+    },
+    "per_language": {
+      "ar": {
+        "n": 51,
+        "n_fraudulent": 23,
+        "n_legitimate": 28,
+        "tp": 19,
+        "fp": 0,
+        "fn": 4,
+        "tn": 28,
+        "precision": 1.0,
+        "recall": 0.8261,
+        "fpr_legit": 0.0,
+        "pr_auc": 1.0
+      },
+      "en": {
+        "n": 68,
+        "n_fraudulent": 40,
+        "n_legitimate": 28,
+        "tp": 34,
+        "fp": 0,
+        "fn": 6,
+        "tn": 28,
+        "precision": 1.0,
+        "recall": 0.85,
+        "fpr_legit": 0.0,
+        "pr_auc": 1.0
+      },
+      "mixed": {
+        "n": 9,
+        "n_fraudulent": 9,
+        "n_legitimate": 0,
+        "tp": 9,
+        "fp": 0,
+        "fn": 0,
+        "tn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "fpr_legit": null,
+        "pr_auc": null
+      }
+    },
+    "per_source": {
+      "synthetic": {
+        "n": 128,
+        "n_fraudulent": 72,
+        "n_legitimate": 56,
+        "tp": 62,
+        "fp": 0,
+        "fn": 10,
+        "tn": 56,
+        "precision": 1.0,
+        "recall": 0.8611,
+        "fpr_legit": 0.0,
+        "pr_auc": 1.0
+      }
+    },
+    "per_scam_type": {
+      "other": {
+        "n": 12,
+        "recall": 1.0,
+        "tp": 12,
+        "fn": 0
+      },
+      "phishing": {
+        "n": 12,
+        "recall": 0.1667,
+        "tp": 2,
+        "fn": 10
+      },
+      "task_scam": {
+        "n": 48,
+        "recall": 1.0,
+        "tp": 48,
+        "fn": 0
+      }
+    },
+    "per_behavior_tag": {
+      "advance_fee": {
+        "n": 12,
+        "recall": 1.0
+      },
+      "brand_misuse": {
+        "n": 26,
+        "recall": 0.6154
+      },
+      "credential_request": {
+        "n": 12,
+        "recall": 0.1667
+      },
+      "deposit_to_unlock": {
+        "n": 48,
+        "recall": 1.0
+      },
+      "off_platform_contact": {
+        "n": 37,
+        "recall": 1.0
+      }
+    },
+    "tier_high_risk_rule": {
+      "n": 128,
+      "n_fraudulent": 72,
+      "n_legitimate": 56,
+      "tp": 62,
+      "fp": 0,
+      "fn": 10,
+      "tn": 56,
+      "precision": 1.0,
+      "recall": 0.8611,
+      "fpr_legit": 0.0,
+      "pr_auc": null
+    },
+    "caution_or_above": {
+      "n": 128,
+      "n_fraudulent": 72,
+      "n_legitimate": 56,
+      "tp": 72,
+      "fp": 0,
+      "fn": 0,
+      "tn": 56,
+      "precision": 1.0,
+      "recall": 1.0,
+      "fpr_legit": 0.0,
+      "pr_auc": 1.0
+    }
+  },
+  "baselines": {
+    "n_test_with_url": 0,
+    "note": "not enough URL-bearing records with both labels in train and test; capture the approved URL lists / public datasets to enable URL baselines"
+  },
+  "split": {
+    "train": 122,
+    "test": 128,
+    "train_kits": 11,
+    "test_kits": [
+      "syn_fee01",
+      "syn_legit_bank01",
+      "syn_legit_delivery01",
+      "syn_legit_gig01",
+      "syn_legit_loyalty01",
+      "syn_legit_shop02",
+      "syn_phish01",
+      "syn_task01",
+      "syn_task03",
+      "syn_task04",
+      "syn_task05"
+    ]
+  },
+  "calibrated": true
+}

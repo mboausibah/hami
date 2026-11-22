@@ -52,22 +52,22 @@ testsites: deps
 	$(BE) $(PY) -m app.cli testsites
 
 corpus: deps
-	$(BE) $(PY) -m testsites_generator
+	$(PY) testsites/generator/generate.py
 
 import: deps
 	$(BE) $(PY) -m ml.import_private
 
 capture-labels: deps
-	$(BE) $(PY) -m ml.capture_lists labels
+	$(BE) $(PY) -m ml.capture_lists labels --yes
 
 capture-legit: deps
-	$(BE) $(PY) -m ml.capture_lists legit
+	$(BE) $(PY) -m ml.capture_lists legit --yes
 
 capture-har-candidates: deps
-	$(BE) $(PY) -m ml.capture_lists har-candidates
+	$(BE) $(PY) -m ml.capture_lists har-candidates --yes
 
 capture-live: deps
-	$(BE) $(PY) -m ml.capture_lists live
+	$(BE) $(PY) -m ml.capture_lists live --yes
 
 train: deps
 	$(BE) $(PY) -m ml.train --kind full
