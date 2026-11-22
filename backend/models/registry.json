@@ -12,6 +12,18 @@
       "status": "current",
       "dataset_hash": "01e8c974b2edc086e86e1aa0a84874116a05687fab58f90f9c7f93abdb372066",
       "created_at": "2026-11-22T14:47:52.419445Z"
+    },
+    {
+      "version": "m20261122-172340-full",
+      "status": "candidate",
+      "dataset_hash": "f9b7536aa65475d0ef8b71c4a8b462d3c3de2bf1c0ebb3cddbc472581dac3ed7",
+      "created_at": "2026-11-22T17:26:09.364825Z"
+    },
+    {
+      "version": "m20261122-172703-full",
+      "status": "candidate",
+      "dataset_hash": "f9b7536aa65475d0ef8b71c4a8b462d3c3de2bf1c0ebb3cddbc472581dac3ed7",
+      "created_at": "2026-11-22T17:30:53.064428Z"
     }
   ]
 }

@@ -88,13 +88,45 @@ def scan_record_parts(conn: sqlite3.Connection, scan_id: int) -> dict[str, Any] 
         return None
     analysis = json.loads(read_artifact(arts["analysis"]["path"]))
     text = read_artifact(arts["model_text"]["path"]).decode("utf-8") if "model_text" in arts else ""
+    code_text, code_features = analysis.get("code_text"), analysis.get("code_features")
+    if code_text is None:
+        code_text, code_features = _code_from_stored_har(conn, scan)
     return {
+        "code_text": code_text or "", "code_features": code_features or {},
+        "code_word_count": len((code_text or "").split()),
         "scan": dict(scan), "text": text, "features": analysis.get("features", {}), "lang": analysis.get("lang", ""),
         "hostnames": sorted(set(analysis.get("registration_destinations", [])) | set(analysis.get("asset_hosts", []))),
         "fingerprint": analysis.get("fingerprint", []), "behaviors": analysis.get("behaviors", []),
         "html_path": arts["analysis"]["path"], "word_count": analysis.get("word_count", 0),
         "flags": analysis.get("flags", {}),
     }
+
+
+def _code_from_stored_har(conn: sqlite3.Connection, scan: sqlite3.Row) -> tuple[str, dict[str, float]]:
+    """Delivered-code text for captures analyzed before code analysis existed (reads the stored HAR only)."""
+    from app.analyze import Analysis, analyze_code
+
+    src = scan["stored_from_scan_id"] or scan["scan_id"]
+    row = conn.execute("SELECT path FROM artifacts WHERE scan_id=? AND kind='har' ORDER BY artifact_id LIMIT 1",
+                       (src,)).fetchone()
+    if row is None:
+        return "", {}
+    an = Analysis(page_url=scan["submitted_url"], page_host=scan["host"])
+    analyze_code(an, json.loads(read_artifact(row["path"])))
+    return an.code_text, an.code_features
+
+
+def scan_records(parts: dict[str, Any], base: dict[str, Any]) -> list[dict[str, Any]]:
+    """A capture yields a page-text record (enough visible words) and a delivered-code record (enough code
+    words); both share the kit so they always land on the same side of the split."""
+    out = []
+    if parts["word_count"] >= 25 and parts["text"]:
+        out.append(make_record(**{**base, "text": parts["text"], "features": parts["features"],
+                                  "extra": {**base.get("extra", {}), "view": "page"}}))
+    if parts.get("code_word_count", 0) >= 40:
+        out.append(make_record(**{**base, "rid": base["rid"] + ":code", "text": parts["code_text"],
+                                  "features": parts["code_features"], "extra": {**base.get("extra", {}), "view": "code"}}))
+    return out
 
 
 def dataset_hash(records: list[dict[str, Any]]) -> str:

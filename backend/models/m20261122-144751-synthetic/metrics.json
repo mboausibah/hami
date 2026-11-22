@@ -158,7 +158,8 @@
       "syn_task03",
       "syn_task04",
       "syn_task05"
-    ]
+    ],
+    "private_test_kits": 0
   },
   "calibrated": true
 }

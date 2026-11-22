@@ -28,7 +28,7 @@ from app.config import REPO_DIR, settings
 from app.db import db, utcnow
 from app.urls import normalize_url, registrable_domain
 from ml.arabic import detect_lang
-from ml.records import LABELS, analyze_file, make_record, scan_record_parts, write_jsonl
+from ml.records import LABELS, analyze_file, make_record, scan_record_parts, scan_records, write_jsonl
 
 SITE_EXTS = {".html", ".htm", ".mhtml", ".mht", ".har"}
 CORPUS_DIR = REPO_DIR / "testsites" / "corpus"
@@ -92,11 +92,11 @@ def import_private(report: dict[str, Any], register_candidates: bool) -> list[di
                 if parts is None:
                     continue
                 lang = (row.get("lang") or "").strip() or parts["lang"]
-                records.append(make_record(
+                records.extend(scan_records(parts, dict(
                     rid=f"private:scan:{sid}", source="private_url", kit_id=kit, label=label, origin="private",
-                    text=parts["text"], features=parts["features"], lang=lang, scam_type=scam_type, behavior_tags=tags,
+                    text="", features={}, lang=lang, scam_type=scam_type, behavior_tags=tags,
                     url=parts["scan"]["normalized_url"], html_path=parts["html_path"], hostnames=parts["hostnames"],
-                    fingerprint=parts["fingerprint"], extra={"scan_id": sid}))
+                    fingerprint=parts["fingerprint"], extra={"scan_id": sid})))
             else:
                 path = (priv / ref).resolve()
                 listed_files.add(path.as_posix())
@@ -152,15 +152,51 @@ def import_legit_captures(report: dict[str, Any]) -> list[dict[str, Any]]:
             if parts is None or parts["scan"]["normalized_url"] in seen_urls:
                 continue
             seen_urls.add(parts["scan"]["normalized_url"])
-            if parts["word_count"] < 25:
-                continue  # blocked/thin captures are not useful negatives
             site = registrable_domain(s["host"])
-            records.append(make_record(
+            records.extend(scan_records(parts, dict(
                 rid=f"legit:scan:{s['scan_id']}", source="legit_urls", kit_id=f"legit_{site}", label="legitimate",
-                origin="private", text=parts["text"], features=parts["features"], lang=parts["lang"],
+                origin="private", text="", features={}, lang=parts["lang"],
+                url=parts["scan"]["normalized_url"], html_path=parts["html_path"], hostnames=parts["hostnames"],
+                fingerprint=parts["fingerprint"], extra={"scan_id": s["scan_id"]})))
+    report["legit_captures"] = {"records": len(records), "sites": len({r["kit_id"] for r in records}),
+                                "code_records": sum(1 for r in records if r.get("view") == "code")}
+    return records
+
+
+def import_session_kits(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Session kits (ml/import_sessions.py) take label, kit and scam type from labels.csv rows of the same
+    registrable domain. Other session sites stay unlabeled (review candidates) and never train."""
+    labels_csv = settings.private_dir / "datasets" / "labels.csv"
+    by_site: dict[str, dict[str, str]] = {}
+    if labels_csv.is_file():
+        with labels_csv.open(encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                ref = (row.get("file_or_url") or "").strip()
+                if _is_url(ref) and (row.get("label") or "").strip() in LABELS:
+                    by_site.setdefault(registrable_domain(_host(ref)), row)
+    records, labeled, unlabeled = [], set(), set()
+    with db() as conn:
+        scans = conn.execute("SELECT scan_id, host FROM scans WHERE batch='sessions' AND status='done' "
+                             "ORDER BY scan_id").fetchall()
+        for s in scans:
+            row = by_site.get(registrable_domain(s["host"]))
+            if row is None:
+                unlabeled.add(s["host"])
+                continue
+            parts = scan_record_parts(conn, s["scan_id"])
+            if parts is None:
+                continue
+            tags, _ = _tags(row.get("behavior_tags", ""))
+            new = scan_records(parts, dict(
+                rid=f"session:scan:{s['scan_id']}", source="sessions", kit_id=(row.get("kit_id") or "").strip(),
+                label=row["label"].strip(), origin="private", text="", features={}, lang=parts["lang"],
+                scam_type=(row.get("scam_type") or "").strip(), behavior_tags=tags,
                 url=parts["scan"]["normalized_url"], html_path=parts["html_path"], hostnames=parts["hostnames"],
                 fingerprint=parts["fingerprint"], extra={"scan_id": s["scan_id"]}))
-    report["legit_captures"] = {"pages": len(records), "sites": len({r["kit_id"] for r in records})}
+            if new:
+                labeled.add(s["host"])
+            records.extend(new)
+    report["sessions"] = {"records": len(records), "labeled": sorted(labeled), "unlabeled": sorted(unlabeled)}
     return records
 
 
@@ -186,9 +222,9 @@ def import_synthetic(report: dict[str, Any]) -> list[dict[str, Any]]:
 
 # ---- public datasets -----------------------------------------------------------------------------
 def _find(base: Path, patterns: tuple[str, ...]) -> list[Path]:
-    out = []
+    out: list[Path] = []
     for pat in patterns:
-        out.extend(sorted(base.rglob(pat)))
+        out.extend(p for p in sorted(base.rglob(pat)) if p not in out)
     return out
 
 
@@ -228,8 +264,13 @@ def import_public(report: dict[str, Any]) -> list[dict[str, Any]]:
                 extra={"url_only": parts is None}))
     rep["shops"] = {"rows": len(shop_rows), "with_capture": sum(1 for r in records if r["source"] == "pub_shop" and not r.get("url_only"))}
 
-    # 2) Phishing websites with HTML (Putra 2023): balanced sample of HTML pages.
-    phish = _putra_rows(base)
+    # 2) Phishing websites (Putra 2023, Zenodo 8041387, CC BY 4.0): visible text per site from phishing.csv /
+    #    not-phishing.csv; balanced sample. The 38 GB of per-site zips are not needed.
+    putra_csv = _putra_csv_records(base, rng)
+    records.extend(putra_csv)
+    rep["phishing_putra_csv"] = {"sampled": len(putra_csv),
+                                 "by_label": dict(Counter(r["label"] for r in putra_csv))}
+    phish = _putra_rows(base) if not putra_csv else []
     by_label: dict[str, list] = defaultdict(list)
     for item in phish:
         by_label[item["label"]].append(item)
@@ -272,6 +313,34 @@ def import_public(report: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
+def _putra_csv_records(base: Path, rng: random.Random) -> list[dict[str, Any]]:
+    from ml.arabic import normalize_arabic
+    from app.analyze import AnalyzerInput, analyze
+
+    csv.field_size_limit(min(sys.maxsize, 2 ** 31 - 1))
+    out: list[dict[str, Any]] = []
+    for fname, label in (("phishing.csv", "fraudulent"), ("not-phishing.csv", "legitimate")):
+        path = base / "phishing_putra" / fname
+        if not path.is_file():
+            continue
+        with path.open(encoding="utf-8", errors="replace", newline="") as fh:
+            rows = [r for r in csv.DictReader(fh) if len((r.get("features.text") or "").split()) >= 25]
+        rng.shuffle(rows)
+        for r in rows[:PUBLIC_SAMPLE_PER_CLASS]:
+            text = r["features.text"][:20000]
+            html = "<html><body>" + "".join(f"<p>{line}</p>" for line in text.splitlines() if line.strip()) + "</body></html>"
+            an = analyze(AnalyzerInput(page_url=r.get("url") or "", steps=[(0, "load", html)]))
+            url = (r.get("url") or "").strip()
+            site = registrable_domain(_host(url)) if url else r.get("_id", "")
+            out.append(make_record(
+                rid=f"pub_phish:{r.get('_id')}", source="pub_phish", kit_id=f"pub_phish_{site}", label=label,
+                origin="public", text=an.model_text, features=an.features, lang=an.lang,
+                scam_type="phishing" if label == "fraudulent" else "",
+                behavior_tags=["credential_request"] if label == "fraudulent" else [],
+                url=normalize_url(url) if _is_url(url) else None, extra={"view": "page"}))
+    return out
+
+
 def _host(url: str) -> str:
     from app.urls import hostname
     return hostname(url) if url else ""
@@ -284,7 +353,8 @@ def _url_label_rows(path: Path) -> list[tuple[str, str]]:
         if not reader.fieldnames:
             return out
         cols = {c.lower().strip(): c for c in reader.fieldnames}
-        ucol = next((cols[c] for c in cols if c in ("url", "urls", "website", "domain", "link", "site")), None)
+        ucol = next((cols[c] for c in cols if c in ("url", "urls", "website", "domain", "link", "site")), None) \
+            or next((cols[c] for c in cols if "url" in c), None)
         lcol = next((cols[c] for c in cols if c in ("label", "class", "type", "status", "result", "category", "fraud")), None)
         if not ucol or not lcol:
             return out
@@ -392,6 +462,7 @@ def main(argv: list[str] | None = None) -> int:
     report: dict[str, Any] = {"generated_at": utcnow()}
     records = import_private(report, register_candidates=args.register_candidates)
     records += import_legit_captures(report)
+    records += import_session_kits(report)
     if not args.no_public:
         records += import_public(report)
     if not args.no_synthetic:
@@ -427,8 +498,11 @@ def _print_report(rep: dict[str, Any], out: Path) -> None:
     if pv.get("invalid"):
         print(f"  invalid entries: {pv['invalid']}")
     lc = rep.get("legit_captures", {})
-    print(f"legit_urls captures: {lc.get('pages', 0)} pages from {lc.get('sites', 0)} sites"
-          + ("" if lc.get("pages") else " -> after approval run: make capture-legit"))
+    print(f"legit_urls captures: {lc.get('records', 0)} records ({lc.get('code_records', 0)} delivered-code) from "
+          f"{lc.get('sites', 0)} sites" + ("" if lc.get("records") else " -> after approval run: make capture-legit"))
+    ss = rep.get("sessions", {})
+    print(f"sessions: {ss.get('records', 0)} records from labeled session kits {ss.get('labeled', [])}; "
+          f"unlabeled session sites (review candidates, never trained): {ss.get('unlabeled', [])}")
     pub = rep.get("public", {})
     print(f"public datasets: {'present' if pub.get('present') else 'not found (data/private/public_datasets/)'} "
           + json.dumps({k: v for k, v in pub.items() if k != 'present'}))

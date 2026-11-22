@@ -1,0 +1,49 @@
+{
+  "word_ngram_range": [
+    1,
+    2
+  ],
+  "char_ngram_range": [
+    3,
+    5
+  ],
+  "word_max_features": 40000,
+  "char_max_features": 80000,
+  "struct_weight": 1.5,
+  "C": 4.0,
+  "class_weight": "balanced",
+  "calibration": "sigmoid",
+  "threshold_agree": 0.7697,
+  "threshold_caution": 0.5548,
+  "struct_features": [
+    "deposit_request",
+    "unlock_condition",
+    "deposit_to_unlock",
+    "advance_fee",
+    "commission_transfer",
+    "commission_rate",
+    "vip_table",
+    "invitation_code",
+    "withdrawal_condition",
+    "task_earning",
+    "messaging_link",
+    "off_platform_contact",
+    "gambling",
+    "gambling_deposit",
+    "investment_promise",
+    "fake_shop_discount",
+    "field_card",
+    "field_cvv",
+    "field_otp",
+    "field_bank_password",
+    "field_password",
+    "has_aed_amount",
+    "log_amounts",
+    "log_fields",
+    "thin_content",
+    "registration_destinations",
+    "company_details",
+    "log_words"
+  ],
+  "thresholds_from": "out-of-fold (kit-grouped) on the training split: agree<=2% FPR, caution<=5% FPR"
+}

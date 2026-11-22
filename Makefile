@@ -13,7 +13,7 @@ BE   := cd backend &&
 export PYTHONUTF8=1
 
 .PHONY: help venv deps db run api testsites corpus import import-sessions tier-check capture-labels capture-legit capture-har-candidates \
-        capture-live train train-synthetic eval eval-live discovery discovery-once static-check test e2e \
+        capture-live train train-synthetic eval eval-live promote discovery discovery-once static-check test e2e \
         clients extension check docker-up docker-down clean-storage
 
 help:
@@ -87,6 +87,9 @@ eval: deps
 
 eval-live: deps
 	$(BE) $(PY) -m ml.eval_live
+
+promote: deps
+	$(BE) $(PY) -m ml.promote $(VERSION) --reason "$(REASON)" --reviewer "$(or $(REVIEWER),reviewer)"
 
 discovery: deps
 	$(BE) $(PY) -m app.discovery.worker

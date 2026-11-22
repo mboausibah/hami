@@ -39,6 +39,17 @@
     <div class="col"><h3>Per scam type (recall)</h3><table>{% for k, v in h.per_scam_type.items() %}<tr><td>{{ k }}</td><td>{{ fmt(v.recall) }}</td><td class="muted">n={{ v.n }}</td></tr>{% endfor %}</table></div>
     <div class="col"><h3>Per behavior tag (recall)</h3><table>{% for k, v in h.per_behavior_tag.items() %}<tr><td>{{ k }}</td><td>{{ fmt(v.recall) }}</td><td class="muted">n={{ v.n }}</td></tr>{% endfor %}</table></div>
   </div>
+  {% if result.metrics.thresholds %}<p class="muted">Thresholds: agree {{ result.metrics.thresholds.threshold_agree }},
+    caution {{ result.metrics.thresholds.threshold_caution }} ({{ result.metrics.thresholds['from'] }})</p>{% endif %}
+  {% if result.metrics.kit_cv %}{% set cv = result.metrics.kit_cv %}
+  <h3>Kit-grouped {{ cv.folds }}-fold cross-validation ({{ cv.kits }} kits; each family scored by a model that never saw it)</h3>
+  <table><tr><th></th><th>Precision</th><th>Recall</th><th>FPR (legit)</th><th>PR-AUC</th><th>n</th></tr>
+    {{ mrow('overall', cv.overall) }}
+    {% for k, m in cv.per_source.items() %}{{ mrow('source: ' ~ k, m) }}{% endfor %}
+    {% for k, m in cv.per_view.items() %}{{ mrow('view: ' ~ k, m) }}{% endfor %}
+  </table>
+  <p>{% for k, v in cv.per_scam_type.items() %}<span class="badge t-none">{{ k }} R={{ fmt(v.recall) }} (n={{ v.n }})</span> {% endfor %}</p>
+  {% endif %}
   <h3>Baselines on the same URL-bearing held-out examples (n={{ result.metrics.baselines.n_test_with_url }})</h3>
   {% if result.metrics.baselines.note %}<p class="muted">{{ result.metrics.baselines.note }}</p>{% else %}
   <table><tr><th></th><th>Precision</th><th>Recall</th><th>FPR (legit)</th><th>PR-AUC</th><th>n</th></tr>

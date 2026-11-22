@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,7 @@ def current_model() -> tuple[str | None, Any]:
         if _cache["mtime"] == mtime and _cache["model"] is not None:
             return _cache["version"], _cache["model"]
         reg = read_registry()
-        version = reg.get("current")
+        version = os.environ.get("HAMI_MODEL_VERSION") or reg.get("current")  # override for offline evaluation only
         if not version:
             _cache.update(version=None, model=None, mtime=mtime)
             return None, None

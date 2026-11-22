@@ -81,6 +81,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {it['set']:13s} {defang(it['url'])[:55]:55s} -> {str(p['tier']):22s} score={p.get('score')} "
               f"{'(kit seen in training)' if row['kit_in_training'] else ''}")
     scam = [r for r in rows if r["expected"] == "fraudulent"]
+    def tier_summary(rs: list[dict]) -> dict:
+        return {"n": len(rs), "loaded": sum(r["capture"] == "ok" for r in rs), "tiers": dict(Counter(r["tier"] for r in rs)),
+                "high_risk": sum(r["tier"] == "high_risk" for r in rs),
+                "caution_or_high": sum(r["tier"] in ("high_risk", "caution") for r in rs)}
+    seen_summary = tier_summary([r for r in scam if r["kit_in_training"]])
+    unseen_summary = tier_summary([r for r in scam if not r["kit_in_training"]])
     legit = [r for r in rows if r["expected"] == "legitimate"]
     loaded = lambda rs: [r for r in rs if r["capture"] == "ok"]  # noqa: E731
     summary = {
@@ -92,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         "legit_control": {"n": len(legit), "loaded": len(loaded(legit)), "tiers": dict(Counter(r["tier"] for r in legit)),
                           "flagged_high": sum(r["tier"] == "high_risk" for r in legit),
                           "flagged_caution_or_high": sum(r["tier"] in ("high_risk", "caution") for r in legit)},
+        "scam_seen_kits": seen_summary, "scam_unseen_kits": unseen_summary,
         "median_scan_ms": sorted(r["duration_ms"] for r in rows if r["duration_ms"])[len(rows) // 2] if rows else None,
         "rows": rows,
     }
@@ -102,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nLIVE (reported separately from the held-out test set):")
     print(f"  scam URLs: {s['n']} ({s['loaded']} loaded) -> High risk {s['high_risk']}, Caution or High {s['caution_or_high']};"
           f" tiers {s['tiers']}; kits unseen in training: {s['unseen_kits']}")
+    for title, ss in (("seen kits (family in training)", seen_summary), ("unseen kits (honest)", unseen_summary)):
+        print(f"    {title}: {ss['n']} URLs -> High {ss['high_risk']}, Caution or High {ss['caution_or_high']}; {ss['tiers']}")
     print(f"  legit controls (held-out kits): {l['n']} ({l['loaded']} loaded) -> flagged High {l['flagged_high']}, "
           f"Caution or High {l['flagged_caution_or_high']}; tiers {l['tiers']}")
     print(f"  median scan time {summary['median_scan_ms']} ms; report -> {out}")

@@ -93,6 +93,7 @@ def full_report(records: list[dict[str, Any]], scores: list[float], settings: di
                              for k, v in grouped([r for r in records if r["label"] == "fraudulent"],
                                                  [s for r, s in zip(records, scores) if r["label"] == "fraudulent"],
                                                  agree, lambda r: r["behavior_tags"] or ["untagged"]).items()},
+        "per_view": grouped(records, scores, agree, lambda r: [r.get("view") or "page"]),
         "tier_high_risk_rule": flag_metrics(y, [high_risk_flag(r, s, agree) for r, s in zip(records, scores)]),
         "caution_or_above": binary_metrics(y, scores, caution),
     }

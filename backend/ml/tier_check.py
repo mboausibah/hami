@@ -21,7 +21,10 @@ from pathlib import Path
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", action="store_true", help="list every flagged legitimate page")
+    ap.add_argument("--model", default=None, help="evaluate this model version instead of the current one")
     args = ap.parse_args(argv)
+    if args.model:
+        os.environ["HAMI_MODEL_VERSION"] = args.model
     from app.config import settings
 
     tmp = Path(tempfile.mkdtemp(prefix="hami-tiercheck-")) / "copy.sqlite3"

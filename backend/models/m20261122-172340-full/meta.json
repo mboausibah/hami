@@ -1,0 +1,273 @@
+{
+  "version": "m20261122-172340-full",
+  "kind": "full",
+  "created_at": "2026-11-22T17:26:09.364825Z",
+  "dataset_version": "ds-20261122-172340-full",
+  "dataset_hash": "f9b7536aa65475d0ef8b71c4a8b462d3c3de2bf1c0ebb3cddbc472581dac3ed7",
+  "dataset_info": {
+    "kind": "full",
+    "counts": {
+      "fraudulent": 1733,
+      "legitimate": 3886,
+      "inconclusive": 12
+    },
+    "sources": {
+      "private_url": 4,
+      "private_file": 1,
+      "legit_urls": 213,
+      "sessions": 7,
+      "pub_shop": 1140,
+      "pub_phish": 2000,
+      "pub_tranco": 2000,
+      "synthetic": 262,
+      "reviewed": 4
+    }
+  },
+  "feature_settings": {
+    "word_ngram_range": [
+      1,
+      2
+    ],
+    "char_ngram_range": [
+      3,
+      5
+    ],
+    "word_max_features": 40000,
+    "char_max_features": 80000,
+    "struct_weight": 1.5,
+    "C": 4.0,
+    "class_weight": "balanced",
+    "calibration": "sigmoid",
+    "threshold_agree": 0.5,
+    "threshold_caution": 0.35,
+    "struct_features": [
+      "deposit_request",
+      "unlock_condition",
+      "deposit_to_unlock",
+      "advance_fee",
+      "commission_transfer",
+      "commission_rate",
+      "vip_table",
+      "invitation_code",
+      "withdrawal_condition",
+      "task_earning",
+      "messaging_link",
+      "off_platform_contact",
+      "gambling",
+      "gambling_deposit",
+      "investment_promise",
+      "fake_shop_discount",
+      "field_card",
+      "field_cvv",
+      "field_otp",
+      "field_bank_password",
+      "field_password",
+      "has_aed_amount",
+      "log_amounts",
+      "log_fields",
+      "thin_content",
+      "registration_destinations",
+      "company_details",
+      "log_words"
+    ]
+  },
+  "promotion": {
+    "current": "m20261122-144751-synthetic",
+    "candidate_metrics": {
+      "n": 684,
+      "n_fraudulent": 319,
+      "n_legitimate": 365,
+      "tp": 301,
+      "fp": 29,
+      "fn": 18,
+      "tn": 336,
+      "precision": 0.9121,
+      "recall": 0.9436,
+      "fpr_legit": 0.0795,
+      "pr_auc": 0.9676
+    },
+    "current_metrics": {
+      "n": 684,
+      "n_fraudulent": 319,
+      "n_legitimate": 365,
+      "tp": 66,
+      "fp": 1,
+      "fn": 253,
+      "tn": 364,
+      "precision": 0.9851,
+      "recall": 0.2069,
+      "fpr_legit": 0.0027,
+      "pr_auc": 0.7284
+    },
+    "recall_not_lower": true,
+    "fpr_not_higher": false,
+    "promoted": false
+  },
+  "top_phrases": {
+    "fraudulent": [
+      {
+        "phrase": "indicator:off_platform_contact",
+        "weight": 2.949
+      },
+      {
+        "phrase": "steam",
+        "weight": 2.073
+      },
+      {
+        "phrase": "dhl",
+        "weight": 1.885
+      },
+      {
+        "phrase": "wallet",
+        "weight": 1.405
+      },
+      {
+        "phrase": "indicator:withdrawal_condition",
+        "weight": 1.354
+      },
+      {
+        "phrase": "meta",
+        "weight": 1.212
+      },
+      {
+        "phrase": "id",
+        "weight": 1.191
+      },
+      {
+        "phrase": "banking",
+        "weight": 1.113
+      },
+      {
+        "phrase": "indicator:deposit_to_unlock",
+        "weight": 1.108
+      },
+      {
+        "phrase": "metamask",
+        "weight": 1.098
+      },
+      {
+        "phrase": "indicator:field_password",
+        "weight": 1.006
+      },
+      {
+        "phrase": "valve",
+        "weight": 1.006
+      },
+      {
+        "phrase": "indicator:gambling_deposit",
+        "weight": 0.998
+      },
+      {
+        "phrase": "よくある質問",
+        "weight": 0.986
+      },
+      {
+        "phrase": "user id",
+        "weight": 0.97
+      },
+      {
+        "phrase": "indicator:messaging_link",
+        "weight": 0.957
+      },
+      {
+        "phrase": "valve corporation",
+        "weight": 0.915
+      },
+      {
+        "phrase": "your wallet",
+        "weight": 0.884
+      },
+      {
+        "phrase": "express",
+        "weight": 0.88
+      },
+      {
+        "phrase": "personas",
+        "weight": 0.876
+      }
+    ],
+    "legitimate": [
+      {
+        "phrase": "indicator:log_words",
+        "weight": -4.238
+      },
+      {
+        "phrase": "by",
+        "weight": -1.368
+      },
+      {
+        "phrase": "is",
+        "weight": -1.172
+      },
+      {
+        "phrase": "indicator:has_aed_amount",
+        "weight": -1.073
+      },
+      {
+        "phrase": "to the",
+        "weight": -1.066
+      },
+      {
+        "phrase": "00",
+        "weight": -1.006
+      },
+      {
+        "phrase": "wordpress",
+        "weight": -1.001
+      },
+      {
+        "phrase": "powered",
+        "weight": -0.93
+      },
+      {
+        "phrase": "search",
+        "weight": -0.886
+      },
+      {
+        "phrase": "home",
+        "weight": -0.883
+      },
+      {
+        "phrase": "an account",
+        "weight": -0.882
+      },
+      {
+        "phrase": "for",
+        "weight": -0.879
+      },
+      {
+        "phrase": "the",
+        "weight": -0.862
+      },
+      {
+        "phrase": "zu",
+        "weight": -0.856
+      },
+      {
+        "phrase": "top",
+        "weight": -0.856
+      },
+      {
+        "phrase": "email email",
+        "weight": -0.854
+      },
+      {
+        "phrase": "my password",
+        "weight": -0.835
+      },
+      {
+        "phrase": "email",
+        "weight": -0.834
+      },
+      {
+        "phrase": "read",
+        "weight": -0.824
+      },
+      {
+        "phrase": "all",
+        "weight": -0.823
+      }
+    ]
+  },
+  "train_seconds": 155.2
+}

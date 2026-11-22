@@ -102,7 +102,8 @@ def y_of(recs: list[dict[str, Any]]) -> list[int]:
     return [1 if r["label"] == "fraudulent" else 0 for r in recs]
 
 
-def run_training(kind: str = "full", quiet: bool = False) -> dict[str, Any]:
+def run_training(kind: str = "full", quiet: bool = False, cv: bool = False,
+                 tune_thresholds: bool = False) -> dict[str, Any]:
     t0 = time.monotonic()
     settings.ensure_dirs()
     all_records, info = build_dataset(kind)
@@ -117,7 +118,18 @@ def run_training(kind: str = "full", quiet: bool = False) -> dict[str, Any]:
     snap = settings.processed_dir / "datasets" / f"{ds_version}.jsonl"
     write_jsonl(snap, all_records)
 
-    model = HamiModel(dict(DEFAULT_SETTINGS))
+    model_settings = dict(DEFAULT_SETTINGS)
+    if tune_thresholds and len(train) >= 200:
+        # Thresholds from out-of-fold predictions on the TRAINING split only (the test split stays untouched):
+        # "classifier agrees" at <= 2% false positives on legitimate pages, Caution at <= 5%.
+        from ml.cv import oof_scores, threshold_for_fpr
+
+        oof = oof_scores(train, model_settings)
+        model_settings["threshold_agree"] = threshold_for_fpr(oof, 0.02, DEFAULT_SETTINGS["threshold_agree"])
+        model_settings["threshold_caution"] = min(model_settings["threshold_agree"],
+                                                  threshold_for_fpr(oof, 0.05, DEFAULT_SETTINGS["threshold_caution"]))
+        model_settings["thresholds_from"] = "out-of-fold (kit-grouped) on the training split: agree<=2% FPR, caution<=5% FPR"
+    model = HamiModel(model_settings)
     model.fit([r["text"] for r in train], [r["features"] for r in train], y_of(train))
     scores = list(model.predict_proba([r["text"] for r in test], [r["features"] for r in test]))
     report = M.full_report(test, scores, model.settings)
@@ -158,12 +170,23 @@ def run_training(kind: str = "full", quiet: bool = False) -> dict[str, Any]:
     else:
         decision.update({"promoted": True, "reason": "no current model"})
 
+    if cv:
+        from ml.cv import kit_cv
+
+        metrics_cv = kit_cv(records, model.settings)
+    else:
+        metrics_cv = None
     version = f"m{stamp}-{kind}"
     out_dir = settings.models_dir / version
     model.save(out_dir)
     metrics = {"held_out": report, "baselines": baselines, "split": {
         "train": len(train), "test": len(test), "train_kits": len({r["kit_id"] for r in train}),
-        "test_kits": sorted({r["kit_id"] for r in test})}, "calibrated": model.calibrated}
+        # Only public / synthetic kit ids are written (private and reviewed kit ids can name real sites).
+        "test_kits": sorted({r["kit_id"] for r in test if r["origin"] in ("synthetic", "public")}),
+        "private_test_kits": len({r["kit_id"] for r in test if r["origin"] not in ("synthetic", "public")})}, "calibrated": model.calibrated, "kit_cv": metrics_cv,
+        "thresholds": {"threshold_agree": model.settings["threshold_agree"],
+                       "threshold_caution": model.settings["threshold_caution"],
+                       "from": model.settings.get("thresholds_from", "defaults")}}
     meta = {"version": version, "kind": kind, "created_at": utcnow(), "dataset_version": ds_version,
             "dataset_hash": ds_hash, "dataset_info": info, "feature_settings": model.settings,
             "promotion": decision, "top_phrases": model.top_global_phrases(20),
@@ -214,12 +237,14 @@ def print_result(res: dict[str, Any]) -> None:
     h = m["held_out"]
     print(f"\n=== candidate {res['version']} | dataset {res['dataset_version']} (hash {res['dataset_hash'][:12]}) ===")
     sp = m["split"]
+    fs = res["metrics"].get("thresholds", {})
+    print(f"thresholds: agree {fs.get('threshold_agree')}  caution {fs.get('threshold_caution')}  ({fs.get('from', 'defaults')})")
     print(f"split: train {sp['train']} records / {sp['train_kits']} kits; test {sp['test']} records / "
-          f"{len(sp['test_kits'])} kits (kit-grouped, stable)")
+          f"{len(sp['test_kits']) + sp.get('private_test_kits', 0)} kits (kit-grouped, stable)")
     print(f"held-out overall      {_fmt(h['overall'])}")
     print(f"High-risk rule        {_fmt(h['tier_high_risk_rule'])}")
     print(f"Caution or above      {_fmt(h['caution_or_above'])}")
-    for title, key in (("per language", "per_language"), ("per source", "per_source")):
+    for title, key in (("per language", "per_language"), ("per source", "per_source"), ("per view", "per_view")):
         print(f"{title}:")
         for k, v in h[key].items():
             print(f"  {k:14s} {_fmt(v)}")
@@ -229,6 +254,17 @@ def print_result(res: dict[str, Any]) -> None:
     print("per behavior tag (recall):")
     for k, v in h["per_behavior_tag"].items():
         print(f"  {k:22s} recall {v['recall']}  (n={v['n']})")
+    if m.get("kit_cv"):
+        cvr = m["kit_cv"]
+        print(f"kit-grouped {cvr['folds']}-fold cross-validation ({cvr['kits']} kits; every family scored by a model "
+              f"that never saw it):")
+        print(f"  overall        {_fmt(cvr['overall'])}")
+        print(f"  High-risk rule {_fmt(cvr['tier_high_risk_rule'])}")
+        for key in ("per_source", "per_view", "per_language"):
+            for k, v in cvr[key].items():
+                print(f"  {key[4:]:5s} {k:12s} {_fmt(v)}")
+        for k, v in cvr["per_scam_type"].items():
+            print(f"  scam_type {k:18s} recall {v['recall']}  (n={v['n']})")
     b = m["baselines"]
     print(f"baselines on the same URL-bearing held-out examples (n={b.get('n_test_with_url')}):")
     if "note" in b:
@@ -249,8 +285,9 @@ def print_result(res: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kind", choices=["full", "synthetic"], default="full")
+    ap.add_argument("--no-cv", action="store_true", help="skip kit-grouped cross-validation")
     args = ap.parse_args(argv)
-    run_training(args.kind)
+    run_training(args.kind, cv=not args.no_cv, tune_thresholds=not args.no_cv)
     return 0
 
 
