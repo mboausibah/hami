@@ -100,10 +100,12 @@ clients:
 	cd clients && npm install --no-audit --no-fund
 
 extension: clients
+	$(PY) scripts/make_icons.py
 	cd clients && npm run build -w @hami/extension
 
-check: test e2e clients
+check: test e2e extension
 	cd clients && npm run typecheck && npm run lint
+	$(PY) scripts/extension_check.py
 
 docker-up:
 	docker compose up -d --build

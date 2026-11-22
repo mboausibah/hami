@@ -221,7 +221,7 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
             step = ob["action_step"] if ob and ob["action_step"] is not None else 0
             shot_id = shots.get(step) or (shots.get(0) if shots else None)
             clues.append({
-                "type": ct, "text": clue_text(ct, an, ctx),
+                "type": ct, "text": clue_text(ct, an, ctx, ob["redacted_excerpt"] if ob else None),
                 "excerpt": (ob["redacted_excerpt"] if ob else None),
                 "excerpt_lang": (ob["lang"] if ob else None),
                 "obs_id": ob["obs_id"] if ob else None,

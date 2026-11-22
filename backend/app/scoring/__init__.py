@@ -139,11 +139,18 @@ def headline(decision: Decision) -> dict[str, str]:
     return T.TIER_HEADLINE[decision.tier]
 
 
-def clue_text(clue_type: str, an: Analysis, ctx: ReviewedContext) -> dict[str, str]:
+def clue_text(clue_type: str, an: Analysis, ctx: ReviewedContext, excerpt: str | None = None) -> dict[str, str]:
     tmpl = T.CLUE_TEXT.get(clue_type, {"en": clue_type, "ar": clue_type})
     amount_en = amount_ar = ""
     if clue_type in AMOUNT_CLUES and an.amounts:
-        a = max((x for x in an.amounts if x["currency"] in ("AED", "USD", "USDT")), key=lambda x: x["value"], default=None)
+        # Prefer the amount stated in the cited sentence; otherwise the largest amount on the page.
+        from app.analyze import extract_amounts
+        from ml.arabic import normalize_arabic
+
+        in_excerpt = [{"currency": c, "value": v} for c, v in extract_amounts(normalize_arabic(excerpt or ""))
+                      if c in ("AED", "USD", "USDT")]
+        a = in_excerpt[0] if in_excerpt else max(
+            (x for x in an.amounts if x["currency"] in ("AED", "USD", "USDT")), key=lambda x: x["value"], default=None)
         if a:
             v = f"{a['value']:,.0f}" if a["value"] >= 10 else f"{a['value']:g}"
             amount_en = f" (amount seen: {a['currency']} {v})"

@@ -1,0 +1,22 @@
+{
+  "name": "hami-clients",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "extension"
+  ],
+  "scripts": {
+    "build": "npm run build -w @hami/extension",
+    "typecheck": "npm run typecheck -w @hami/shared && npm run typecheck -w @hami/extension",
+    "lint": "eslint shared/src extension/src extension/build.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/chrome": "^0.3.7",
+    "eslint": "^10.15.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vite": "^8.3.8"
+  }
+}

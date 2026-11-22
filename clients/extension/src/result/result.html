@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hami — result</title>
+<style>
+body{margin:0;background:#f6f7f9;font:15px/1.5 system-ui,-apple-system,"Segoe UI","Noto Sans Arabic",Tahoma,sans-serif;color:#16202a}
+header{background:#0b5d4b;color:#fff;padding:12px 20px;font-weight:800;display:flex;gap:8px;align-items:center}
+header img{background:#fff;border-radius:4px}
+main{max-width:720px;margin:20px auto;padding:0 16px}
+.box{background:#fff;border:1px solid #e3e8ee;border-radius:12px;padding:16px}
+.url{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#5b6876;word-break:break-all;direction:ltr;unicode-bidi:isolate}
+.status{color:#5b6876}.status.err{color:#b42318}
+button{background:none;border:0;color:#0b5d4b;text-decoration:underline;cursor:pointer;font:inherit;padding:6px 0}
+</style>
+</head>
+<body>
+<header><img src="../../icons/icon32.png" alt="" width="22" height="22"> حامي Hami</header>
+<main>
+  <div class="box">
+    <p class="url" id="url"></p>
+    <p class="status" id="status"></p>
+    <div id="result"></div>
+    <button id="recheck" data-t="recheck" hidden>Check again (live)</button>
+  </div>
+</main>
+<script type="module" src="./result.ts"></script>
+</body>
+</html>

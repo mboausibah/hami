@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hami settings</title>
+<style>
+:root{--brand:#0b5d4b;--line:#e3e8ee;--muted:#5b6876}
+body{margin:0;background:#f6f7f9;font:15px/1.5 system-ui,-apple-system,"Segoe UI","Noto Sans Arabic",Tahoma,sans-serif;color:#16202a}
+header{background:var(--brand);color:#fff;padding:12px 20px;font-weight:800}
+main{max-width:720px;margin:20px auto;padding:0 16px}
+.box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 8px}
+.row{display:flex;gap:10px;align-items:flex-start;margin:12px 0}
+.row input[type=checkbox]{margin-top:4px;width:18px;height:18px}
+.help{color:var(--muted);font-size:13px;margin:2px 0 0}
+input[type=url],select{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit;direction:ltr}
+button{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+button.secondary{background:#fff;color:#16202a;border:1px solid var(--line)}
+.ok{color:#1a7f37}.err{color:#b42318}
+.privacy{background:#e8f1ff;border:1px solid #b6d0ff;border-radius:10px;padding:10px 12px;font-size:14px}
+</style>
+</head>
+<body>
+<header data-t="optionsTitle">Hami settings</header>
+<main>
+  <p class="privacy" data-t="privacyNote"></p>
+  <div class="box">
+    <h2 data-t="serverUrl">Server URL</h2>
+    <input id="serverUrl" type="url" spellcheck="false">
+    <p class="help" data-t="serverUrlHelp"></p>
+    <button class="secondary" id="test" data-t="testConnection">Test connection</button> <span id="test-result"></span>
+  </div>
+  <div class="box">
+    <h2 data-t="language">Language</h2>
+    <select id="lang"><option value="ar">العربية</option><option value="en">English</option></select>
+  </div>
+  <div class="box">
+    <label class="row"><input type="checkbox" id="localList"><span><strong data-t="localList"></strong><p class="help" data-t="localListHelp"></p></span></label>
+    <label class="row"><input type="checkbox" id="checkSearchResults"><span><strong data-t="searchChecks"></strong><p class="help" data-t="searchChecksHelp"></p></span></label>
+    <label class="row"><input type="checkbox" id="autoCheck"><span><strong data-t="autoCheck"></strong><p class="help" data-t="autoCheckHelp"></p></span></label>
+  </div>
+  <div class="box">
+    <h2 data-t="listSynced">High-risk list on this device</h2>
+    <p id="list-status" class="help"></p>
+    <button class="secondary" id="sync" data-t="syncNow">Sync now</button>
+  </div>
+  <button id="save" data-t="save">Save</button> <span id="saved" class="ok"></span>
+</main>
+<script type="module" src="./options.ts"></script>
+</body>
+</html>

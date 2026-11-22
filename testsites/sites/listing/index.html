@@ -20,5 +20,9 @@ a.site{display:inline-block;margin-top:10px;background:#1a73e8;color:#fff;paddin
   <p class="muted">Open · Closes 6 pm</p>
   <a class="site" href="http://site-a.localhost:8100/" data-item-id="authority">Website</a>
 </div>
+<script>
+  // Keep the link on the same port as this test-site server.
+  if (location.port) document.querySelector("a.site").href = "http://site-a.localhost:" + location.port + "/";
+</script>
 </body>
 </html>

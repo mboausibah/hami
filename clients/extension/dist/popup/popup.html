@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hami</title>
+  <script type="module" crossorigin src="../assets/popup.js"></script>
+  <link rel="stylesheet" crossorigin href="../assets/popup.css">
+</head>
+<body>
+<header>
+  <div class="brand"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABWUlEQVR42mNgGAVEAu5Yb30gtofieCCuR8PxSPL6lFgkDzWsH4j3A/F9IP5PJr4PNaMfaqY8Icv3U2AZsXj/qANGHUBzB1hU54DxgDhg8aHd/2Hg0LVL9HVA67ql/9FB2sw++jggvL/5PzZQungm7R0Aiu/3Xz5jWA4S0yxMpNwBoKAFxSeIlkoPQ5ED8R+8eoHV9x6tFZSnAfR4vfjgLoo8yGFEBj15DsBmASilo6d4bPJUccCmM8ewWoLL5+ghRKoD5qNrwBfH2BIdehrBgucTanQQncrRLcdT+iFjfUJtgn5yHIGlwMGG+4lpEfED8XlSHAHKKURYDjKTn5T233tiSjwCKR6G35PcTsTnCFDpBvI1kcH+nuxGKtQRlDZK9SltjuNME1SLcyIdMp8Ey+fTqnMSjytdIMV3PK17SPI4as39BDseVHZIPtTHIJw/UP1Febr6mhYAAMAJzSWpBvNtAAAAAElFTkSuQmCC" alt="" width="20" height="20"><span>حامي Hami</span></div>
+  <nav>
+    <button id="tab-check" class="tab on" data-t="check">Check</button>
+    <button id="tab-updates" class="tab"><span data-t="updates">Updates</span> <span id="updates-count" class="count" hidden></span></button>
+    <button id="open-options" class="icon" title="Settings" aria-label="Settings">⚙</button>
+  </nav>
+</header>
+<main>
+  <section id="view-check">
+    <div class="target"><span id="target-host" class="host"></span></div>
+    <details id="listing-box">
+      <summary data-t="listingNameLabel">Business name shown in the listing (optional)</summary>
+      <input id="listing-name" type="text" maxlength="200" autocomplete="off">
+      <p class="help" data-t="listingNameHelp"></p>
+    </details>
+    <button id="check-btn" class="primary" data-t="checkThisPage">Check this page</button>
+    <p id="status" class="status" hidden></p>
+    <div id="result"></div>
+    <div id="result-actions" hidden>
+      <button id="recheck" class="link" data-t="recheck">Check again (live)</button>
+      <button id="open-full" class="link" data-t="openFullResult">Open full result</button>
+    </div>
+  </section>
+  <section id="view-updates" hidden>
+    <div id="alerts"></div>
+    <h3 data-t="watchedSites">Watched sites</h3>
+    <div id="watches"></div>
+  </section>
+</main>
+</body>
+</html>

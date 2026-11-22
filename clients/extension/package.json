@@ -1,0 +1,14 @@
+{
+  "name": "@hami/extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hami Chrome extension (Manifest V3).",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hami/shared": "1.0.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@hami/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hami API client, response types, Arabic/English strings, tier mapping and device-ID helper (shared by the Chrome extension and the mobile app).",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

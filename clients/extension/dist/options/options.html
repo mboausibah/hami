@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hami settings</title>
+<style>:root{--brand:#0b5d4b;--line:#e3e8ee;--muted:#5b6876}body{color:#16202a;background:#f6f7f9;margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Noto Sans Arabic,Tahoma,sans-serif}header{background:var(--brand);color:#fff;padding:12px 20px;font-weight:800}main{max-width:720px;margin:20px auto;padding:0 16px}.box{border:1px solid var(--line);background:#fff;border-radius:12px;margin-bottom:14px;padding:16px}h2{margin:0 0 8px;font-size:15px}.row{align-items:flex-start;gap:10px;margin:12px 0;display:flex}.row input[type=checkbox]{width:18px;height:18px;margin-top:4px}.help{color:var(--muted);margin:2px 0 0;font-size:13px}input[type=url],select{border:1px solid var(--line);width:100%;font:inherit;direction:ltr;border-radius:8px;padding:8px}button{background:var(--brand);color:#fff;font:inherit;cursor:pointer;border:0;border-radius:8px;padding:8px 14px}button.secondary{color:#16202a;border:1px solid var(--line);background:#fff}.ok{color:#1a7f37}.err{color:#b42318}.privacy{background:#e8f1ff;border:1px solid #b6d0ff;border-radius:10px;padding:10px 12px;font-size:14px}</style>
+  <script type="module" crossorigin src="../assets/options.js"></script>
+</head>
+<body>
+<header data-t="optionsTitle">Hami settings</header>
+<main>
+  <p class="privacy" data-t="privacyNote"></p>
+  <div class="box">
+    <h2 data-t="serverUrl">Server URL</h2>
+    <input id="serverUrl" type="url" spellcheck="false">
+    <p class="help" data-t="serverUrlHelp"></p>
+    <button class="secondary" id="test" data-t="testConnection">Test connection</button> <span id="test-result"></span>
+  </div>
+  <div class="box">
+    <h2 data-t="language">Language</h2>
+    <select id="lang"><option value="ar">العربية</option><option value="en">English</option></select>
+  </div>
+  <div class="box">
+    <label class="row"><input type="checkbox" id="localList"><span><strong data-t="localList"></strong><p class="help" data-t="localListHelp"></p></span></label>
+    <label class="row"><input type="checkbox" id="checkSearchResults"><span><strong data-t="searchChecks"></strong><p class="help" data-t="searchChecksHelp"></p></span></label>
+    <label class="row"><input type="checkbox" id="autoCheck"><span><strong data-t="autoCheck"></strong><p class="help" data-t="autoCheckHelp"></p></span></label>
+  </div>
+  <div class="box">
+    <h2 data-t="listSynced">High-risk list on this device</h2>
+    <p id="list-status" class="help"></p>
+    <button class="secondary" id="sync" data-t="syncNow">Sync now</button>
+  </div>
+  <button id="save" data-t="save">Save</button> <span id="saved" class="ok"></span>
+</main>
+</body>
+</html>
