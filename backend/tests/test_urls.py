@@ -10,7 +10,7 @@ def test_normalize():
 
 
 def test_registrable_domain():
-    assert registrable_domain("uae2.ap1.shop") == "ap1.shop"
+    assert registrable_domain("uae2.portal-vip.shop") == "portal-vip.shop"
     assert registrable_domain("www.mohre.gov.ae") == "mohre.gov.ae"
     assert registrable_domain("a.b.example.co.uk") == "example.co.uk"
     assert registrable_domain("site-a.localhost") == "site-a.localhost"
