@@ -1,0 +1,28 @@
+# Private team data — never commit
+data/private/
+data/processed/
+
+# Secrets and local state
+.env
+*.sqlite3
+*.db
+backend/storage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node / Expo
+node_modules/
+.expo/
+clients/mobile/android/
+clients/mobile/ios/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
