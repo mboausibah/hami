@@ -4,6 +4,17 @@
   <h1>{{ t('links') }}</h1>
   <div class="filters">{% for s in ['pending','approved','rejected'] %}<a href="/review/links?status={{ s }}" class="{{ 'on' if status == s }}">{{ t(s) }}</a>{% endfor %}</div>
   <p class="muted">{{ t('links_note') }}</p>
+  <form method="get" action="/review/links" class="filters">
+    <input type="hidden" name="status" value="{{ status }}">
+    <input type="text" name="host" value="{{ host }}" placeholder="{{ t('host') }}" style="max-width:320px">
+    <button class="secondary">{{ t('filter') }}</button>
+  </form>
+  {% if host and status == 'pending' and links %}
+  <form method="post" action="/review/links/bulk-approve" onsubmit="return confirm('{{ t('bulk_confirm') }}')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="host" value="{{ host }}">
+    <button>{{ t('bulk_approve') }} ({{ links | selectattr('strength', 'equalto', 'strong') | list | length }})</button>
+  </form>
+  {% endif %}
   {% if not links %}<p class="muted">{{ t('no_items') }}</p>{% endif %}
   {% for l in links %}{% include "_link.html" %}{% endfor %}
 </div>

@@ -93,6 +93,8 @@ S = {
     "no_strong_signals": {"en": "No strong signals", "ar": "لا مؤشرات قوية"},
     "insufficient_evidence": {"en": "Insufficient evidence", "ar": "أدلة غير كافية"},
     "domain": {"en": "Domain", "ar": "النطاق"},
+    "bulk_approve": {"en": "Approve all strong links for this site", "ar": "الموافقة على كل الروابط القوية لهذا الموقع"},
+    "bulk_confirm": {"en": "Approve every pending strong link shown for this site?", "ar": "الموافقة على كل الروابط القوية المعلقة لهذا الموقع؟"},
     "relevant": {"en": "High risk / Caution / awaiting", "ar": "خطر مرتفع / تنبيه / بانتظار الموافقة"},
     "discovery_note": {"en": "Domains from certificate transparency logs and from references inside saved HAR files. They are review candidates only: never published, labeled or alerted on without review.",
                        "ar": "نطاقات من سجلات شفافية الشهادات ومن مراجع داخل ملفات HAR المحفوظة. هي مرشحة للمراجعة فقط: لا تُنشر ولا تُصنف ولا يُرسل عنها تنبيه دون مراجعة."},

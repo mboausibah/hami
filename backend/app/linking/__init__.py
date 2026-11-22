@@ -138,7 +138,11 @@ def process_scan(scan_id: int) -> list[int]:
             signals = compare(other, new, common)
             if not is_candidate(signals):
                 continue
-            exists = conn.execute("SELECT 1 FROM links WHERE scan_a=? AND scan_b=?", (other["scan_id"], scan_id)).fetchone()
+            # One open link per pair of sites: a re-scan of either site does not re-propose it.
+            exists = conn.execute(
+                "SELECT 1 FROM links WHERE review_status IN ('pending','approved') AND "
+                "((host_a=? AND host_b=?) OR (host_a=? AND host_b=?))",
+                (other["host"], new["host"], new["host"], other["host"])).fetchone()
             if exists:
                 continue
             strong = [s for s in signals if s["strength"] == "strong"]

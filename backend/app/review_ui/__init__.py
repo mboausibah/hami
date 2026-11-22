@@ -196,11 +196,25 @@ def reviewer_artifact(artifact_id: int) -> Response:
 
 # ---- links & alerts ------------------------------------------------------------------------------------------
 @ui.get("/links", response_class=HTMLResponse, dependencies=[Depends(reviewer_session)])
-def links_page(request: Request, status: str = "pending") -> HTMLResponse:
+def links_page(request: Request, status: str = "pending", host: str = "") -> HTMLResponse:
+    q, args = "SELECT * FROM links WHERE review_status=?", [status]
+    if host:
+        q += " AND (host_a=? OR host_b=?)"
+        args += [host.strip().lower(), host.strip().lower()]
     with db() as conn:
-        rows = [services.link_dict(l) for l in conn.execute(
-            "SELECT * FROM links WHERE review_status=? ORDER BY link_id DESC LIMIT 300", (status,))]
-    return render(request, "links.html", links=rows, status=status)
+        rows = [services.link_dict(l) for l in conn.execute(q + " ORDER BY link_id DESC LIMIT 300", args)]
+    return render(request, "links.html", links=rows, status=status, host=host)
+
+
+@ui.post("/links/bulk-approve", dependencies=[Depends(reviewer_session), Depends(check_csrf)])
+def post_links_bulk(host: str = Form(...), note: str = Form("")) -> Response:
+    """Approve every pending *strong* link touching one site (each approval recorded individually)."""
+    with db() as conn:
+        ids = [r[0] for r in conn.execute("SELECT link_id FROM links WHERE review_status='pending' AND strength='strong' "
+                                          "AND (host_a=? OR host_b=?)", (host.strip().lower(), host.strip().lower()))]
+        for lid in ids:
+            services.review_link(conn, lid, "approve", "reviewer", note or "bulk approval (strong links for one site)")
+    return back(f"/review/links?status=approved&host={host}")
 
 
 @ui.post("/links/{link_id}/review", dependencies=[Depends(reviewer_session), Depends(check_csrf)])

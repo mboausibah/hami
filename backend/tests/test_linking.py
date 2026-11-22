@@ -85,6 +85,11 @@ def test_rejected_link_cancels_pending_alerts(sites):
     a = submit_scan(sites("site-a"), "manual", force=True)
     with db() as conn:
         services.create_watch(conn, a["scan_id"], str(uuid.uuid4()))
+        # An open link already exists for this pair (one open link per pair); reject it so a re-scan re-proposes.
+        for l in conn.execute("SELECT link_id FROM links WHERE review_status<>'rejected' "
+                              "AND host_a IN ('site-a.localhost','site-b.localhost') "
+                              "AND host_b IN ('site-a.localhost','site-b.localhost')").fetchall():
+            services.review_link(conn, l["link_id"], "reject", "rev")
     b = submit_scan(sites("site-b"), "manual", force=True)
     with db() as conn:
         link = conn.execute("SELECT * FROM links WHERE scan_b=? ORDER BY link_id DESC LIMIT 1", (b["scan_id"],)).fetchone()
