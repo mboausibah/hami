@@ -27,5 +27,12 @@ if [ -z "$HAMI_REVIEWER_TOKEN" ]; then
   export HAMI_REVIEWER_TOKEN
 fi
 
+# Database: DATABASE_URL from .env wins; with `--profile postgres` the postgres service exists and is used;
+# otherwise the SQLite file in the volume.
+if [ -z "$DATABASE_URL" ] && [ -n "$HAMI_PG_URL" ] && python -c "import socket; socket.gethostbyname('postgres')" 2>/dev/null; then
+  DATABASE_URL="$HAMI_PG_URL"
+  export DATABASE_URL
+fi
+
 python -m app.cli migrate
 exec "$@"

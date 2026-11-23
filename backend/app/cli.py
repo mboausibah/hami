@@ -13,7 +13,11 @@ def cmd_migrate(_args: argparse.Namespace) -> int:
 
     settings.ensure_dirs()
     applied = migrate()
-    print(f"database: {settings.db_path}")
+    from sqlalchemy.engine import make_url
+
+    from app.db import database_url
+
+    print(f"database: {make_url(database_url()).render_as_string(hide_password=True)}")
     print("applied migrations: " + (", ".join(applied) if applied else "none (up to date)"))
     _seed()
     return 0

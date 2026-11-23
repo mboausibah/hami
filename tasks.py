@@ -99,6 +99,11 @@ def t_export_indicators(_a: list[str]) -> None:
     py("-m", "app.cli", "export-indicators")
 
 
+def t_migrate_to_postgres(a: list[str]) -> None:
+    """copy the SQLite DB into PostgreSQL and verify counts: migrate-to-postgres [--to URL] [--sqlite PATH]"""
+    py("-m", "app.db.transfer", *a)
+
+
 def t_migrate(a: list[str]) -> None:
     """create / upgrade the database (DATABASE_URL or SQLite)"""
     py("-m", "app.cli", "migrate", *a)

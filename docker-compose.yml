@@ -17,6 +17,8 @@ services:
       HAMI_DATA_DIR: /data
       HAMI_MODELS_DIR: /data/models
       HAMI_PROCESSED_DIR: /data/processed
+      # Used only when the postgres profile is on (docker compose --profile postgres up); otherwise SQLite.
+      HAMI_PG_URL: postgresql+psycopg://hami:${POSTGRES_PASSWORD:-hami-local-only}@postgres:5432/hami
       # Synthetic test sites inside the container (for scripts/e2e_check.py against this API).
       RUN_TESTSITES: "true"
       TESTSITE_PORT: "8100"
@@ -25,6 +27,10 @@ services:
       - "${HAMI_BIND:-127.0.0.1}:8000:8000"
     volumes:
       - hami-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false   # only with --profile postgres
     shm_size: "1gb"
     init: true
     restart: unless-stopped
@@ -41,6 +47,7 @@ services:
       HAMI_DATA_DIR: /data
       HAMI_MODELS_DIR: /data/models
       HAMI_PROCESSED_DIR: /data/processed
+      HAMI_PG_URL: postgresql+psycopg://hami:${POSTGRES_PASSWORD:-hami-local-only}@postgres:5432/hami
     command: ["python", "-m", "app.discovery.worker"]
     healthcheck:
       disable: true
@@ -50,17 +57,24 @@ services:
     init: true
     restart: unless-stopped
 
-  # Optional hosted-style database. Start with:  docker compose --profile postgres up -d
-  # and set in .env:  DATABASE_URL=postgresql+psycopg://hami:<password>@postgres:5432/hami
+  # Hosted-style database, one command away:  docker compose --profile postgres up
+  # The API and worker switch to it automatically (HAMI_PG_URL). Not published on any port.
+  # Copy existing SQLite data first:  docker compose --profile postgres run --rm api python -m app.db.transfer
+  # On a server set POSTGRES_PASSWORD in .env (docs/DEPLOY.md).
   postgres:
     image: postgres:16-alpine
     profiles: ["postgres"]
     environment:
       POSTGRES_USER: hami
       POSTGRES_DB: hami
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hami-local-only}
     volumes:
       - hami-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hami -d hami"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
     restart: unless-stopped
 
 volumes:
