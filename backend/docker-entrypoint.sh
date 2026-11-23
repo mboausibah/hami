@@ -21,7 +21,7 @@ if [ -z "$HAMI_REVIEWER_TOKEN" ]; then
   if [ ! -s "$TOKEN_FILE" ]; then
     python -c "import secrets; print(secrets.token_urlsafe(24))" > "$TOKEN_FILE"
     chmod 600 "$TOKEN_FILE"
-    echo "generated a reviewer token (see it with: docker compose exec api cat /data/reviewer_token)"
+    echo "generated a reviewer token (see it with: docker compose exec api python -m app.cli token)"
   fi
   HAMI_REVIEWER_TOKEN=$(cat "$TOKEN_FILE")
   export HAMI_REVIEWER_TOKEN
