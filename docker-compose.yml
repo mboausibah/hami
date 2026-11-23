@@ -77,6 +77,27 @@ services:
       retries: 30
     restart: unless-stopped
 
+  # HTTPS on a server:  HAMI_DOMAIN=hami.example.org docker compose --profile postgres --profile https up -d
+  # Caddy obtains and renews the certificate; the API itself stays on 127.0.0.1 (docs/DEPLOY.md).
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: ["https"]
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      HAMI_DOMAIN: ${HAMI_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
   hami-data: {}
   hami-pg: {}
+  caddy-data: {}
+  caddy-config: {}

@@ -1,0 +1,16 @@
+# Caddy in front of the Hami API: automatic HTTPS (Let's Encrypt) for HAMI_DOMAIN, HTTP -> HTTPS redirect.
+# Used by: docker compose --profile https up -d   (see docs/DEPLOY.md)
+{$HAMI_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	reverse_proxy api:8000
+	log {
+		output stdout
+		format console
+	}
+}
