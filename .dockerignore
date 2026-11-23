@@ -1,5 +1,6 @@
 # Keep private data, local state and client builds out of the image.
-data/
+data/private/
+data/processed/
 .env
 .venv/
 **/__pycache__/

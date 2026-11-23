@@ -21,7 +21,7 @@ COPY backend/docker-entrypoint.sh backend/docker-entrypoint.sh
 COPY testsites testsites
 
 RUN mkdir -p /data && chown -R pwuser:pwuser /data /app \
-    && chmod +x backend/docker-entrypoint.sh
+    && sed -i 's/\r$//' backend/docker-entrypoint.sh && chmod +x backend/docker-entrypoint.sh
 USER pwuser
 WORKDIR /app/backend
 VOLUME ["/data"]

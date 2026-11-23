@@ -1,7 +1,8 @@
 # Production-style run: Hami API + discovery worker sharing one volume (SQLite DB, artifacts, models).
 # Database and artifact storage are chosen by DATABASE_URL / STORAGE_URL (docs/architecture.md).
-#   cp .env.example .env   # set HAMI_REVIEWER_TOKEN
-#   docker compose up -d --build
+#   docker compose up            (a fresh clone needs nothing else; .env is optional)
+# Reviewer token: HAMI_REVIEWER_TOKEN in .env, or generated on first start:
+#   docker compose exec api cat /data/reviewer_token
 # API and reviewer console: http://localhost:8000 (/review). Put HTTPS in front for public use (Phase 2).
 services:
   api:
@@ -9,7 +10,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     image: hami:latest
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false   # optional: a fresh clone works without .env
     environment:
       HAMI_DATA_DIR: /data
       HAMI_MODELS_DIR: /data/models
@@ -18,7 +21,8 @@ services:
       RUN_TESTSITES: "true"
       TESTSITE_PORT: "8100"
     ports:
-      - "8000:8000"
+      # Local only by default; on a server Caddy proxies to it (docs/DEPLOY.md). HAMI_BIND=0.0.0.0 to expose.
+      - "${HAMI_BIND:-127.0.0.1}:8000:8000"
     volumes:
       - hami-data:/data
     shm_size: "1gb"
@@ -30,7 +34,9 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false   # optional: a fresh clone works without .env
     environment:
       HAMI_DATA_DIR: /data
       HAMI_MODELS_DIR: /data/models
