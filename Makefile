@@ -9,7 +9,7 @@ endif
 
 TASKS := run api token migrate testsites corpus import import-sessions train train-synthetic eval eval-live eval-holdout \
          tier-check promote capture-labels capture-legit capture-har-candidates capture-live discovery static-check test test-postgres e2e \
-         clients extension check docker-up docker-down export-indicators migrate-to-postgres release help
+         clients extension check docker-up docker-down export-indicators migrate-to-postgres release screenshots docs help
 
 .PHONY: $(TASKS)
 .DEFAULT_GOAL := help

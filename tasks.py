@@ -225,6 +225,11 @@ def t_extension(_a: list[str]) -> None:
     npm("run", "build", "-w", "@hami/extension")
 
 
+def t_docs(a: list[str]) -> None:
+    """presentation: docs/Hami.pptx (python-pptx) + docs/Hami.pdf (needs PowerPoint on Windows)"""
+    py(str(ROOT / "scripts/make_docs.py"), *a, cwd=ROOT)
+
+
 def t_screenshots(a: list[str]) -> None:
     """real screenshots of the extension and console (fictional test sites only) -> docs/screenshots/"""
     py(str(ROOT / "scripts/capture_screens.py"), *a, cwd=ROOT)
