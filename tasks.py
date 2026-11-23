@@ -94,6 +94,11 @@ def t_token(_a: list[str]) -> None:
     py("-m", "app.cli", "token")
 
 
+def t_export_indicators(_a: list[str]) -> None:
+    """write data/seed/indicators.json from reviewer-confirmed cases (indicators only, no page content)"""
+    py("-m", "app.cli", "export-indicators")
+
+
 def t_migrate(a: list[str]) -> None:
     """create / upgrade the database (DATABASE_URL or SQLite)"""
     py("-m", "app.cli", "migrate", *a)

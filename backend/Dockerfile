@@ -19,6 +19,7 @@ COPY backend/ml backend/ml
 COPY backend/models backend/models
 COPY backend/docker-entrypoint.sh backend/docker-entrypoint.sh
 COPY testsites testsites
+COPY data/seed data/seed
 
 RUN mkdir -p /data && chown -R pwuser:pwuser /data /app \
     && sed -i 's/\r$//' backend/docker-entrypoint.sh && chmod +x backend/docker-entrypoint.sh

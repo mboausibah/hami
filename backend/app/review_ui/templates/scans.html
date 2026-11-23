@@ -21,7 +21,7 @@
       <td><a href="/review/scans/{{ r.scan_id }}">{{ r.scan_id }}</a></td>
       <td><a href="/review/scans/{{ r.scan_id }}" class="mono">{{ defang(r.host) }}</a>
         {% if r.listing_name %}<div class="muted">listing: {{ r.listing_name }}</div>{% endif %}</td>
-      <td>{{ r.source_type }}{% if r.batch %} <span class="muted">({{ r.batch }})</span>{% endif %}
+      <td>{% if r.batch == 'seed' %}<span class="badge t-caution">seeded from team review</span>{% else %}{{ r.source_type }}{% if r.batch %} <span class="muted">({{ r.batch }})</span>{% endif %}{% endif %}
         {% if r.capture_mode == 'stored' %}<div class="muted">{{ t('stored') }}</div>{% endif %}</td>
       <td><span class="badge t-{{ r.tier or 'none' }}">{{ t(r.tier) if r.tier else '-' }}</span></td>
       <td>{{ '%.2f'|format(r.score) if r.score is not none else '-' }}</td>

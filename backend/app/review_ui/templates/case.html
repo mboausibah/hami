@@ -12,6 +12,9 @@
     · captured {{ (p.captured_at or '')[:19].replace('T',' ') }} · {{ p.duration_ms or '-' }} ms
     · {{ t('watchers') }}: {{ watchers }}
   </p>
+  {% if is_seed %}<p class="badge t-caution">Seeded from team review · مُضاف من مراجعة الفريق</p>
+  <p class="muted">Loaded from data/seed/indicators.json on first start: the team's reviewer decision with indicators only
+    (domain, hostnames, kit ID, distinctive file hashes, infrastructure hosts). No page content or screenshots ship with Hami.</p>{% endif %}
   <p class="en"><strong>{{ p.headline.en if p.headline }}</strong></p>
   <p class="ar"><strong>{{ p.headline.ar if p.headline }}</strong></p>
   <p>
@@ -36,10 +39,10 @@
       <p class="mono">{{ p.rules_fired | join(', ') }}</p>
       {% if p.strong_links %}<h3>Reviewed-case links</h3><p class="mono">{{ p.strong_links }}</p>{% endif %}
       {% if p.evidence and p.evidence.kit_match %}<h3>Kit match ({{ p.evidence.kit_match.relation if p.evidence.kit_match.relation else 'same_kit' }})</h3>
-        <p class="muted">{{ p.evidence.kit_match.host }} · {{ p.evidence.kit_match.n_files }} files</p>
+        <p class="muted">{{ p.evidence.kit_match.host }} · {{ p.evidence.kit_match.n_files }} files{% if p.evidence.kit_match.host in seed_hosts %} · seeded from team review{% endif %}</p>
         <p class="mono">{{ p.evidence.kit_match.files | join(', ') }}</p>{% endif %}
       {% if p.evidence and p.evidence.domain_inherited %}<h3>Registrable domain</h3>
-        <p>{{ p.evidence.domain_inherited.domain }} (confirmed: {{ p.evidence.domain_inherited.confirmed_host }})</p>{% endif %}
+        <p>{{ p.evidence.domain_inherited.domain }} (confirmed: {{ p.evidence.domain_inherited.confirmed_host }}{% if p.evidence.domain_inherited.confirmed_host in seed_hosts %}, seeded from team review{% endif %})</p>{% endif %}
       {% if p.evidence and p.evidence.code_mentions %}<h3>Delivered code mentions</h3>
         <p class="mono">{% for k, v in p.evidence.code_mentions.items() %}{{ k }}×{{ v }} {% endfor %}{% if p.code_score is not none %} · code score {{ '%.3f'|format(p.code_score) }}{% endif %}</p>{% endif %}
       {% if p.top_phrases %}<h3>{{ t('top_phrases') }}</h3>

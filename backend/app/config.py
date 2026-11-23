@@ -74,6 +74,8 @@ class Settings:
     private_dir: Path = field(default_factory=lambda: Path(_env("HAMI_PRIVATE_DIR", str(REPO_DIR / "data" / "private"))))
     processed_dir: Path = field(default_factory=lambda: Path(_env("HAMI_PROCESSED_DIR", str(REPO_DIR / "data" / "processed"))))
 
+    seed_path: Path = field(default_factory=lambda: Path(_env("HAMI_SEED_PATH", str(REPO_DIR / "data" / "seed" / "indicators.json"))))
+    load_seed: bool = field(default_factory=lambda: _env_bool("HAMI_LOAD_SEED", True))
     reviewer_token: str = field(default_factory=lambda: _env("HAMI_REVIEWER_TOKEN", "") or _token_file())
     public_base_url: str = field(default_factory=lambda: _env("HAMI_PUBLIC_BASE_URL", "http://localhost:8000"))
 

@@ -15,7 +15,26 @@ def cmd_migrate(_args: argparse.Namespace) -> int:
     applied = migrate()
     print(f"database: {settings.db_path}")
     print("applied migrations: " + (", ".join(applied) if applied else "none (up to date)"))
+    _seed()
     return 0
+
+
+def _seed() -> None:
+    """Load data/seed/indicators.json (reviewer-confirmed cases from the team) into an empty or older DB."""
+    if not settings.load_seed:
+        return
+    from app.seed import load_seed
+
+    r = load_seed()
+    if r["cases"]:
+        print(f"seed indicators: loaded {r['cases']} confirmed cases ({r['hosts']} hosts, {r['assets']} files) "
+              "- marked 'seeded from team review'")
+
+
+def cmd_export_indicators(_args: argparse.Namespace) -> int:
+    from app.seed import main as export_main
+
+    return export_main()
 
 
 def cmd_testsites(args: argparse.Namespace) -> int:
@@ -63,6 +82,7 @@ def cmd_devserver(args: argparse.Namespace) -> int:
     _ensure_env()
     settings.ensure_dirs()
     migrate()
+    _seed()
     if not read_registry().get("current"):
         print("no current model: training one on the synthetic corpus (make train-synthetic)...")
         from ml.train import run_training
@@ -87,11 +107,13 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="create/upgrade the SQLite database").set_defaults(fn=cmd_migrate)
     sub.add_parser("token", help="print the reviewer token").set_defaults(fn=cmd_token)
+    sub.add_parser("export-indicators", help="write data/seed/indicators.json from reviewed cases").set_defaults(
+        fn=cmd_export_indicators)
     ts = sub.add_parser("testsites", help="serve the synthetic test sites (site-a/b/c.localhost, listing)")
     ts.add_argument("--port", type=int, default=None)
     ts.set_defaults(fn=cmd_testsites)
     dv = sub.add_parser("devserver", help="local development server (make run)")
-    dv.add_argument("--host", default="0.0.0.0")
+    dv.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to expose on the network")
     dv.add_argument("--port", type=int, default=8000)
     dv.set_defaults(fn=cmd_devserver)
     args = parser.parse_args(argv)

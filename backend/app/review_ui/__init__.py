@@ -145,6 +145,8 @@ def case_page(request: Request, scan_id: int, msg: str | None = None) -> HTMLRes
         alerts = [services.alert_dict(conn, a) for a in conn.execute(
             "SELECT * FROM alerts WHERE watched_host=? OR related_scan_id=? ORDER BY alert_id DESC", (p["host"], scan_id))]
         watchers = conn.execute("SELECT COUNT(*) FROM watches WHERE host=? AND deleted_at IS NULL", (p["host"],)).fetchone()[0]
+        seed_hosts = {r[0] for r in conn.execute("SELECT host FROM scans WHERE batch='seed'")}
+        is_seed = (conn.execute("SELECT batch FROM scans WHERE scan_id=?", (scan_id,)).fetchone() or [None])[0] == "seed"
         other_scans = [dict(r) for r in conn.execute(
             "SELECT scan_id, submitted_at, capture_mode, (SELECT risk_tier FROM assessments WHERE scan_id=scans.scan_id "
             "ORDER BY assessment_id DESC LIMIT 1) tier FROM scans WHERE host=? AND scan_id<>? ORDER BY scan_id DESC LIMIT 20",
@@ -154,6 +156,7 @@ def case_page(request: Request, scan_id: int, msg: str | None = None) -> HTMLRes
     shots = [a for a in p["artifacts"] if a["kind"] == "screenshot"]
     return render(request, "case.html", p=p, obs=obs, assessments=assessments, history=history, links=links,
                   alerts=alerts, watchers=watchers, shots=shots, other_scans=other_scans, msg=msg,
+                  seed_hosts=seed_hosts, is_seed=is_seed,
                   tags=services.BEHAVIOR_TAGS, scam_types=services.SCAM_TYPES)
 
 
