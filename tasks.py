@@ -72,7 +72,8 @@ def py(*args: str, cwd: Path = BACKEND, check: bool = True, extra_env: dict[str,
 
 
 def npm(*args: str) -> None:
-    exe = shutil.which("npm")
+    # On Windows the runnable launcher is npm.cmd (the extensionless "npm" is a POSIX shell script).
+    exe = (shutil.which("npm.cmd") if os.name == "nt" else None) or shutil.which("npm")
     if not exe:
         sys.exit("Node.js 20+ (npm) is needed to build the extension: https://nodejs.org")
     sh([exe, *args], cwd=CLIENTS)
@@ -222,6 +223,11 @@ def t_extension(_a: list[str]) -> None:
     t_clients([])
     py(str(ROOT / "scripts/make_icons.py"), cwd=ROOT)
     npm("run", "build", "-w", "@hami/extension")
+
+
+def t_release(a: list[str]) -> None:
+    """GitHub Release with hami-extension.zip attached (needs gh + gh auth login): release [--dry-run] [--no-build]"""
+    py(str(ROOT / "scripts/release.py"), *a, cwd=ROOT)
 
 
 def t_check(_a: list[str]) -> None:
