@@ -54,13 +54,9 @@ def main() -> int:
     print(f"local API {api}; screenshots -> {shots}")
     try:
         with sync_playwright() as p:
-            # Test copy of the build: investigator mode's optional permissions (debugger, downloads) are granted up
-            # front because Chrome's permission prompt cannot be clicked under automation. Same code otherwise.
+            # Main flow: the shipped build exactly as users load it (optional permissions NOT granted).
             test_dist = Path(tmp) / "ext"
             shutil.copytree(DIST, test_dist)
-            man = json.loads((test_dist / "manifest.json").read_text(encoding="utf-8"))
-            man["permissions"] = man["permissions"] + man.pop("optional_permissions", [])
-            (test_dist / "manifest.json").write_text(json.dumps(man), encoding="utf-8")
             ctx = p.chromium.launch_persistent_context(
                 str(Path(tmp) / "chrome-profile"), channel="chromium", headless=not args.headed,
                 args=[f"--disable-extensions-except={test_dist}", f"--load-extension={test_dist}"],
@@ -69,6 +65,8 @@ def main() -> int:
             ext_id = sw.url.split("/")[2]
             base = f"chrome-extension://{ext_id}"
             check("extension loaded (MV3 service worker running)", bool(ext_id), ext_id)
+            check("shipped build runs without the optional permissions (no chrome.debugger)",
+                  sw.evaluate("() => typeof chrome.debugger === 'undefined' && typeof chrome.downloads === 'undefined'"))
             sw.evaluate("cfg => chrome.storage.sync.set(cfg)", {"serverUrl": api, "lang": "en", "localList": True,
                                                                  "checkSearchResults": True})
             # PART 2: one-time consent screen on install; automatic checking only after agreeing.
@@ -226,6 +224,38 @@ def main() -> int:
                 check("snapshot stored as a HAR-format artifact (metadata) with SHA-256", False, "no snapshot scan")
             d_page.close()
 
+            # Search shields on an original Google-like fixture (request interception; Google is not contacted).
+            c.post("/scans", json={"url": site("site-c"), "source_type": "manual"})  # make Site C known to the server
+            html = SEARCH_FIXTURE.format(a=site("site-a"), c=site("site-c"))
+            ctx.route("https://www.google.com/search*", lambda route: route.fulfill(status=200, content_type="text/html", body=html))
+            page.goto("https://www.google.com/search?q=part+time+job+dubai")
+            page.wait_for_function("document.querySelectorAll('[data-hami-done]').length >= 3", timeout=15000)
+            page.wait_for_timeout(1500)
+            tiers = page.evaluate("""() => [...document.querySelectorAll('#rso .g')].map(g => {
+                const host = g.querySelector('span'); const b = host && host.shadowRoot && host.shadowRoot.querySelector('button');
+                return b ? b.dataset.tier : null; })""")
+            check("Search shields added to every result", len(tiers) == 3 and all(t is not None for t in tiers), str(tiers))
+            check("Site A shield red from the local list", tiers[0] == "high_risk", str(tiers))
+            check("Site C shield from hostname lookup: no strong signals", tiers[1] == "no_strong_signals", str(tiers))
+            check("unknown site gets a neutral shield", tiers[2] == "", str(tiers))
+            page.screenshot(path=str(shots / "search_shields.png"))
+            ctx.close()
+
+            # PART 4: investigator mode in a second profile. Chrome's permission prompt cannot be clicked under
+            # automation, so this copy grants the OPTIONAL debugger + downloads permissions up front (same code).
+            inv_dist = Path(tmp) / "ext-investigator"
+            shutil.copytree(DIST, inv_dist)
+            man = json.loads((inv_dist / "manifest.json").read_text(encoding="utf-8"))
+            man["permissions"] = man["permissions"] + man.pop("optional_permissions", [])
+            (inv_dist / "manifest.json").write_text(json.dumps(man), encoding="utf-8")
+            ctx = p.chromium.launch_persistent_context(
+                str(Path(tmp) / "chrome-profile-investigator"), channel="chromium", headless=not args.headed,
+                args=[f"--disable-extensions-except={inv_dist}", f"--load-extension={inv_dist}"],
+                viewport={"width": 1280, "height": 860}, accept_downloads=True)
+            sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
+            base = f"chrome-extension://{sw.url.split('/')[2]}"
+            sw.evaluate("cfg => chrome.storage.sync.set(cfg)", {"serverUrl": api, "lang": "en", "localList": True,
+                                                                 "autoCheck": True, "consentAt": "2026-01-01T00:00:00Z"})
             # PART 4: investigator mode - full HAR via chrome.debugger, sanitized on the device, saved after 10 s idle.
             sw.evaluate("() => chrome.storage.sync.set({investigatorMode: true, evidenceUpload: true})")
             ctx.add_cookies([{"name": "sid", "value": "COOKIESECRET", "domain": "site-a.localhost", "path": "/"}])
@@ -261,23 +291,8 @@ def main() -> int:
                       str(up))
             opts2.close()
             inv.close()
-
-            # Search shields on an original Google-like fixture (request interception; Google is not contacted).
-            c.post("/scans", json={"url": site("site-c"), "source_type": "manual"})  # make Site C known to the server
-            html = SEARCH_FIXTURE.format(a=site("site-a"), c=site("site-c"))
-            ctx.route("https://www.google.com/search*", lambda route: route.fulfill(status=200, content_type="text/html", body=html))
-            page.goto("https://www.google.com/search?q=part+time+job+dubai")
-            page.wait_for_function("document.querySelectorAll('[data-hami-done]').length >= 3", timeout=15000)
-            page.wait_for_timeout(1500)
-            tiers = page.evaluate("""() => [...document.querySelectorAll('#rso .g')].map(g => {
-                const host = g.querySelector('span'); const b = host && host.shadowRoot && host.shadowRoot.querySelector('button');
-                return b ? b.dataset.tier : null; })""")
-            check("Search shields added to every result", len(tiers) == 3 and all(t is not None for t in tiers), str(tiers))
-            check("Site A shield red from the local list", tiers[0] == "high_risk", str(tiers))
-            check("Site C shield from hostname lookup: no strong signals", tiers[1] == "no_strong_signals", str(tiers))
-            check("unknown site gets a neutral shield", tiers[2] == "", str(tiers))
-            page.screenshot(path=str(shots / "search_shields.png"))
             ctx.close()
+
     finally:
         proc.terminate()
         proc.wait(timeout=15)

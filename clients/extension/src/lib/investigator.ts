@@ -22,6 +22,7 @@ export function isRecording(tabId: number): boolean {
 
 export async function start(tabId: number, url: string): Promise<void> {
   if (recordings.has(tabId)) return;
+  if (!ensureListeners()) throw new Error("investigator mode needs the debugger permission (turn it on in Options)");
   await chrome.debugger.attach({ tabId }, "1.3");
   await chrome.debugger.sendCommand({ tabId }, "Network.enable", { maxPostDataSize: 0 });
   recordings.set(tabId, { url, started: new Date().toISOString(), entries: new Map() });
@@ -78,10 +79,21 @@ async function onEvent(source: chrome.debugger.Debuggee, method: string, params?
   }
 }
 
-chrome.debugger.onEvent.addListener((s, m, p) => void onEvent(s, m, p));
-chrome.debugger.onDetach.addListener((s) => {
-  if (s.tabId !== undefined) recordings.delete(s.tabId);
-});
+// chrome.debugger only exists once the user grants the optional "debugger" permission (investigator mode).
+// Touching it unconditionally at load time would crash the whole service worker for everyone else.
+let listening = false;
+function ensureListeners(): boolean {
+  if (listening) return true;
+  if (typeof chrome.debugger === "undefined") return false;
+  chrome.debugger.onEvent.addListener((s, m, p) => void onEvent(s, m, p));
+  chrome.debugger.onDetach.addListener((s) => {
+    if (s.tabId !== undefined) recordings.delete(s.tabId);
+  });
+  listening = true;
+  return true;
+}
+ensureListeners(); // registered synchronously at startup when the permission is already granted
+chrome.permissions.onAdded.addListener(() => void ensureListeners());
 
 function toBase64(bytes: Uint8Array): string {
   let bin = "";
@@ -116,6 +128,7 @@ export async function save(tabId: number): Promise<SavedEvidence> {
   const host = new URL(rec.url).hostname.replace(/[^a-z0-9.-]/gi, "_");
   const filename = `hami-evidence-${host}-${new Date().toISOString().replace(/[:.]/g, "-")}.har`;
   const b64 = toBase64(new TextEncoder().encode(harText));
+  if (typeof chrome.downloads === "undefined") throw new Error("saving evidence needs the downloads permission (Options)");
   await chrome.downloads.download({ url: `data:application/json;base64,${b64}`, filename, saveAs: false });
   return { filename, sha256, entries: entries.length, harText, pageUrl: rec.url };
 }
