@@ -145,6 +145,12 @@ PAGE_LANG_JS = r"""
 """
 
 
+def _http_url(current: str, fallback: str) -> str:
+    """The page's URL if it is a web page; pages that end on about:blank, data: or an error page keep the last
+    real http(s) URL (otherwise the page would be scored as host 'about' and lose its domain context)."""
+    return current if current.lower().startswith(("http://", "https://")) else fallback
+
+
 @dataclass
 class CaptureStep:
     step: int
@@ -315,7 +321,7 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                 log("load_failed", error=msg)
 
             if res.status == "ok":
-                res.final_url = page.url
+                res.final_url = _http_url(page.url, (resp.url if resp else "") or url)
                 await snapshot(0, "load")
                 state["phase"] = "actions"
                 if collect_nav:
@@ -362,7 +368,7 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                             step += 1
                         except PWError as e:
                             log("action_failed", kind=kind, error=str(e).splitlines()[0][:200])
-                res.final_url = page.url
+                res.final_url = _http_url(page.url, res.final_url or url)
             res.request_count = state["requests"]
             await context.close()
         finally:
