@@ -90,6 +90,11 @@ def t_api(a: list[str]) -> None:
     py("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", *a)
 
 
+def t_token(_a: list[str]) -> None:
+    """print the reviewer-console token (Docker: docker compose exec api python -m app.cli token)"""
+    py("-m", "app.cli", "token")
+
+
 def t_migrate(a: list[str]) -> None:
     """create / upgrade the database (DATABASE_URL or SQLite)"""
     py("-m", "app.cli", "migrate", *a)

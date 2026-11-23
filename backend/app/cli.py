@@ -44,6 +44,15 @@ def _ensure_env() -> None:
         print("generated a reviewer token in .env (keep it private)")
 
 
+def cmd_token(_args: argparse.Namespace) -> int:
+    """Print the reviewer token (for the console login)."""
+    if not settings.reviewer_token:
+        print("no reviewer token configured (set HAMI_REVIEWER_TOKEN in .env)", file=sys.stderr)
+        return 1
+    print(settings.reviewer_token)
+    return 0
+
+
 def cmd_devserver(args: argparse.Namespace) -> int:
     """make run: .env + token, DB, a current model (trains on synthetic data if none), test sites, API."""
     import uvicorn
@@ -64,7 +73,7 @@ def cmd_devserver(args: argparse.Namespace) -> int:
     start_in_thread(settings.testsite_port)
     print("")
     print(f"  Hami API          http://localhost:{args.port}   (health: /health, docs: /docs)")
-    print(f"  Reviewer console  http://localhost:{args.port}/review   (token: HAMI_REVIEWER_TOKEN in .env)")
+    print(f"  Reviewer console  http://localhost:{args.port}/review   (token: python tasks.py token)")
     print(f"  Test sites        http://site-a.localhost:{settings.testsite_port}/  site-b, site-c, listing (automated tests only)")
     print(f"  Model             {read_registry().get('current')}")
     print("  Chrome extension  chrome://extensions -> Developer mode -> Load unpacked -> clients/extension/dist")
@@ -77,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="hami")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="create/upgrade the SQLite database").set_defaults(fn=cmd_migrate)
+    sub.add_parser("token", help="print the reviewer token").set_defaults(fn=cmd_token)
     ts = sub.add_parser("testsites", help="serve the synthetic test sites (site-a/b/c.localhost, listing)")
     ts.add_argument("--port", type=int, default=None)
     ts.set_defaults(fn=cmd_testsites)

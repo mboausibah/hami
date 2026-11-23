@@ -29,6 +29,15 @@ def _load_dotenv(path: Path) -> None:
 _load_dotenv(REPO_DIR / ".env")
 
 
+def _token_file() -> str:
+    """Docker: reviewer token generated on first start into the data volume (see docker-entrypoint.sh)."""
+    f = Path(os.environ.get("HAMI_DATA_DIR", str(BACKEND_DIR / "storage"))) / "reviewer_token"
+    try:
+        return f.read_text(encoding="utf-8").strip() if f.is_file() else ""
+    except OSError:
+        return ""
+
+
 def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
@@ -65,7 +74,7 @@ class Settings:
     private_dir: Path = field(default_factory=lambda: Path(_env("HAMI_PRIVATE_DIR", str(REPO_DIR / "data" / "private"))))
     processed_dir: Path = field(default_factory=lambda: Path(_env("HAMI_PROCESSED_DIR", str(REPO_DIR / "data" / "processed"))))
 
-    reviewer_token: str = field(default_factory=lambda: _env("HAMI_REVIEWER_TOKEN", ""))
+    reviewer_token: str = field(default_factory=lambda: _env("HAMI_REVIEWER_TOKEN", "") or _token_file())
     public_base_url: str = field(default_factory=lambda: _env("HAMI_PUBLIC_BASE_URL", "http://localhost:8000"))
 
     # Capture limits (safety rules, section 2).
