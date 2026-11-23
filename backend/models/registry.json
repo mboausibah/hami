@@ -1,5 +1,5 @@
 {
-  "current": "m20261122-144751-synthetic",
+  "current": "m20261122-172703-full",
   "versions": [
     {
       "version": "m20261122-144633-full",
@@ -9,7 +9,7 @@
     },
     {
       "version": "m20261122-144751-synthetic",
-      "status": "current",
+      "status": "retired",
       "dataset_hash": "01e8c974b2edc086e86e1aa0a84874116a05687fab58f90f9c7f93abdb372066",
       "created_at": "2026-11-22T14:47:52.419445Z"
     },
@@ -21,9 +21,14 @@
     },
     {
       "version": "m20261122-172703-full",
-      "status": "candidate",
+      "status": "current",
       "dataset_hash": "f9b7536aa65475d0ef8b71c4a8b462d3c3de2bf1c0ebb3cddbc472581dac3ed7",
-      "created_at": "2026-11-22T17:30:53.064428Z"
+      "created_at": "2026-11-22T17:30:53.064428Z",
+      "manual_promotion": {
+        "reviewer": "Mohammad",
+        "reason": "4x recall (0.21 to 0.83); FPR 0.022, High warnings come from rules and kit matching with 0 false alarms on legitimate pages",
+        "at": "2026-11-22T18:47:27.253545Z"
+      }
     }
   ]
 }

@@ -270,5 +270,44 @@
       }
     ]
   },
-  "train_seconds": 235.5
+  "train_seconds": 235.5,
+  "manual_promotion": {
+    "manual": true,
+    "reviewer": "Mohammad",
+    "reason": "4x recall (0.21 to 0.83); FPR 0.022, High warnings come from rules and kit matching with 0 false alarms on legitimate pages",
+    "at": "2026-11-22T18:47:27.253545Z",
+    "previous": "m20261122-144751-synthetic",
+    "automatic_rule": {
+      "current": "m20261122-144751-synthetic",
+      "candidate_metrics": {
+        "n": 684,
+        "n_fraudulent": 319,
+        "n_legitimate": 365,
+        "tp": 265,
+        "fp": 8,
+        "fn": 54,
+        "tn": 357,
+        "precision": 0.9707,
+        "recall": 0.8307,
+        "fpr_legit": 0.0219,
+        "pr_auc": 0.9676
+      },
+      "current_metrics": {
+        "n": 684,
+        "n_fraudulent": 319,
+        "n_legitimate": 365,
+        "tp": 66,
+        "fp": 1,
+        "fn": 253,
+        "tn": 364,
+        "precision": 0.9851,
+        "recall": 0.2069,
+        "fpr_legit": 0.0027,
+        "pr_auc": 0.7284
+      },
+      "recall_not_lower": true,
+      "fpr_not_higher": false,
+      "promoted": false
+    }
+  }
 }
