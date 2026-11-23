@@ -225,6 +225,11 @@ def t_extension(_a: list[str]) -> None:
     npm("run", "build", "-w", "@hami/extension")
 
 
+def t_screenshots(a: list[str]) -> None:
+    """real screenshots of the extension and console (fictional test sites only) -> docs/screenshots/"""
+    py(str(ROOT / "scripts/capture_screens.py"), *a, cwd=ROOT)
+
+
 def t_release(a: list[str]) -> None:
     """GitHub Release with hami-extension.zip attached (needs gh + gh auth login): release [--dry-run] [--no-build]"""
     py(str(ROOT / "scripts/release.py"), *a, cwd=ROOT)

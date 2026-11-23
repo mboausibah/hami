@@ -1,6 +1,6 @@
 /** Bilingual result card (tier, up to 3 clues with screenshots, what to do, what couldn't be checked,
  * live/stored label, watch toggle). Used by the popup, the full result page and in-page overlays. */
-import { dirOf, t, tierStyle, type Lang, type ScanResult } from "@hami/shared";
+import { STRINGS, dirOf, t, tierStyle, type Lang, type ScanResult, type StringKey } from "@hami/shared";
 
 export const CARD_CSS = `
 .hami-card{font:14px/1.45 system-ui,-apple-system,"Segoe UI","Noto Sans Arabic",Tahoma,sans-serif;color:#16202a;background:#fff}
@@ -122,7 +122,11 @@ export function renderCard(container: HTMLElement, r: ScanResult, opts: CardOpti
   const h = el("bdi", undefined, r.host);
   h.dir = "ltr";
   meta.append(h);
-  if (r.review) meta.append(el("span", undefined, `${t("reviewedAs", lang)}: ${r.review.label}`));
+  if (r.review) {
+    const key = `label_${r.review.label}` as StringKey;
+    const label = key in STRINGS ? t(key, lang) : r.review.label;
+    meta.append(el("span", undefined, `${t("reviewedAs", lang)}: ${label}`));
+  }
   if (r.model_version && !opts.compact) meta.append(el("span", undefined, `${t("model", lang)}: ${r.model_version}`));
   card.append(meta);
 

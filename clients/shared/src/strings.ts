@@ -27,6 +27,9 @@ export const STRINGS = {
     ar: "تعذر الوصول إلى الموقع الآن؛ هذه النتيجة من النسخة المحفوظة.",
   },
   reviewedAs: { en: "Reviewed by Hami as", ar: "تمت مراجعته من حامي على أنه" },
+  label_fraudulent: { en: "fraudulent", ar: "احتيالي" },
+  label_legitimate: { en: "legitimate", ar: "مشروع" },
+  label_inconclusive: { en: "inconclusive", ar: "غير حاسم" },
   model: { en: "Model", ar: "النموذج" },
   watch: { en: "Watch for updates", ar: "تابع التحديثات" },
   watchHelp: {

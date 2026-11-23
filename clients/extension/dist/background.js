@@ -189,6 +189,18 @@ var c = {
 		en: "Reviewed by Hami as",
 		ar: "تمت مراجعته من حامي على أنه"
 	},
+	label_fraudulent: {
+		en: "fraudulent",
+		ar: "احتيالي"
+	},
+	label_legitimate: {
+		en: "legitimate",
+		ar: "مشروع"
+	},
+	label_inconclusive: {
+		en: "inconclusive",
+		ar: "غير حاسم"
+	},
 	model: {
 		en: "Model",
 		ar: "النموذج"
