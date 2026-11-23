@@ -57,7 +57,6 @@ def deps() -> None:
     if not VPY.exists():
         say("creating .venv")
         venv.EnvBuilder(with_pip=True).create(VENV)
-        sh([str(VPY), "-m", "pip", "install", "--upgrade", "pip"])
     newest = max(p.stat().st_mtime for p in REQS)
     if not MARKER.exists() or MARKER.stat().st_mtime < newest:
         say("installing backend dependencies")
