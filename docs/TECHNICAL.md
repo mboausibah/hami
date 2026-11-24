@@ -132,6 +132,9 @@ Recall per scam type (CV): task scam 0.91 (66), phishing 0.83 (1,012), gambling 
 System-level checks beyond the model:
 - **Unseen legitimate pages** (`python tasks.py eval-holdout`). 50 UAE job boards, shops, gig and micro-task platforms not in training: 0 High, 0 Caution. The 95% upper bound is about 6%.
 - **Tier check.** On 111 legitimate pages: 0 false alarms from rules, delivered code or kits. All 11 pages of the confirmed aed99 family were High.
+- **Brand-new scam family** (`python tasks.py eval-unseen`, private list, never trained): 1 of 1 flagged. It is Caution from the server alone, behind a Cloudflare challenge, from the invite code in the address, a first certificate 87 days ago and a random .xyz name. Its money-flow routes appear only after login, so not High.
+- **Legitimate sign-up/login pages** (`python tasks.py eval-signup`, 38 pages): 31 loaded. 0 High; 2 Caution, both from the page classifier and not the wall rules; 9 Insufficient evidence. All 5 referral-code links got neither High nor Caution.
+- **The 50 legitimate pages re-scored with the new rules:** 0 High, 0 Caution of 51 loaded. 9 are Insufficient evidence, mostly bot challenges previously misread as clean pages.
 - **Honest weakness.** The text model alone has recall 0 on the small set of real sign-in-wall pages from the team's sessions. Those are caught by kit matching and domain inheritance, which is the reason they exist.
 
 ## 5. Sign-in walls: kit fingerprinting

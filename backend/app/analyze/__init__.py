@@ -238,7 +238,10 @@ def analyze(inp: AnalyzerInput) -> Analysis:
     server_words = len(re.findall(r"\w+", server_text))
     challenge_traffic = any("/cdn-cgi/challenge-platform/" in (e.get("request", {}).get("url", "") or "")
                             for e in ((inp.har or {}).get("log", {}).get("entries", []) or [])[:60])
-    bot_challenge = (bool(P.BLOCK_PAGE.search(server_text)) and server_words < 150) or (
+    first_title = ""
+    if soups and soups[0][1].title and soups[0][1].title.string:
+        first_title = normalize_arabic(soups[0][1].title.string)
+    bot_challenge = (bool(P.BLOCK_PAGE.search(server_text + " | " + first_title)) and server_words < 150) or (
         challenge_traffic and server_words < 150)
     client = inp.client if isinstance(inp.client, dict) else None
     if client:
@@ -548,11 +551,11 @@ def _wall_indicators(an: Analysis, inp: AnalyzerInput, soups: list, lines_by_ste
                                                 "text": "page asks for a security/fund password",
                                                 "route": "security-password route referenced"}[w.security_password],
                                        source="page_structure", details={"how": w.security_password}))
-    if w.phone_only:
+    if w.phone_only and not (bot_challenge and not client):
         an.indicators.append(Indicator(type="phone_only_signup", strength="weak",
                                        excerpt=f"phone number only{(' (' + w.country_code + ')') if w.country_code else ''}, no e-mail",
                                        source="page_structure"))
-    if w.registration_wall and not w.company_identity:
+    if w.registration_wall and not w.company_identity and not (bot_challenge and not client):
         an.indicators.append(Indicator(type="no_company_identity", strength="weak",
                                        excerpt="no company name, address, terms, privacy or contact link",
                                        source="page_structure"))

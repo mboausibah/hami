@@ -156,6 +156,13 @@ def main() -> int:
             page.wait_for_timeout(800)
             shot(page, "07_signin_wall_kit_match.png", full_page=True)
 
+            # Registration wall of a family Hami has never seen (Site E, fictional): no reviewed case, no kit match.
+            page.goto(f"{base}/popup/popup.html?target={site('site-e')}index/user/register/invite_code/QV7K2M.html")
+            page.click("#check-btn")
+            page.wait_for_selector(".hami-card", timeout=90000)
+            page.wait_for_timeout(800)
+            shot(page, "12_unseen_registration_wall.png", full_page=True)
+
             # Local list synced -> automatic check on a candidate: toolbar badge + High-risk banner.
             opts = ctx.new_page()
             opts.goto(f"{base}/options/options.html")

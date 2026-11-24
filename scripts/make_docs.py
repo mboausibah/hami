@@ -420,8 +420,8 @@ def s_model(prs, n, m):
         box(s, Inches(3.9), y + Inches(0.05), int(bar_w), Inches(0.26), fill=GREEN2, shape=MSO_SHAPE.RECTANGLE, name=f"bar-{i}")
         text(s, Inches(6.08), y, Inches(0.9), Inches(0.35), f"{r['recall']:.2f}", size=13, bold=True, color=GREEN)
     text(s, Inches(0.6), Inches(6.42), Inches(6.2), Inches(0.5),
-         "0 of 50 unseen legitimate UAE job boards, shops and gig sites flagged (95% upper bound ≈ 6%). "
-         "Small, mostly synthetic samples for some scam types.", size=11, color=MUTED)
+         "Unseen legitimate pages: 0 of 50 flagged (95% bound ≈ 6%); sign-up pages: 0 High, 2 Caution of 31. "
+         "Brand-new scam family: 1 of 1 flagged (Caution).", size=11, color=MUTED)
     cd = CategoryChartData()
     cd.categories = ["URL only", "URL + page text", "Full detector"]
     cd.add_series("Recall", [bl["url_only"]["recall"], bl["url_plus_text"]["recall"], bl["full_model"]["recall"]])
@@ -468,7 +468,7 @@ def s_investigator(prs, n):
     title(s, "Investigator view: leads with evidence, not guesses", "Reviewer console, linked sites and an exportable case brief")
     picture(s, SHOTS / "09_console_case_kit_match.png", Inches(0.6), Inches(1.75), w=Inches(5.9), max_h=Inches(3.4))
     picture(s, SHOTS / "10_case_brief.png", Inches(6.8), Inches(1.75), w=Inches(5.9), max_h=Inches(3.4))
-    items = [("1", "Clusters", "Sites linked by the same kit, shared infrastructure or registration destinations; reviewers approve each link."),
+    items = [("1", "Clusters", "Same kit, shared infrastructure, redirect/invite gateways, registration-page template reuse; reviewers approve each link."),
              ("2", "Case brief", "Defanged URLs, first/last seen, evidence with SHA-256, observations kept apart from inferences."),
              ("3", "Investigator mode", "A sanitized .har from the browser, hashed on the device and verified by the server.")]
     for i, (num, head, body) in enumerate(items):
@@ -481,18 +481,20 @@ def s_investigator(prs, n):
 
 def s_live(prs, n):
     s = blank(prs)
-    title(s, "Live results on real UAE scam sites", "Fresh install from the repository, no private data · scans in 5–12 seconds · 23 Nov 2026")
+    title(s, "Live results on real UAE scam sites", "Server-side checks with the repository's code and seed, no private data · scans in 5–17 seconds · 23–24 Nov 2026")
     rows = [("Site", "What Hami saw", "Result"),
             ("betnala[.]com", "Login wall · 26 files identical to confirmed aed99 · own code mentions deposits 51×, withdrawals 34×", "High risk"),
             ("betfugu[.]com", "Login wall · 13 identical files with the confirmed kit", "High risk"),
             ("cs.aed99[.]com", "Support subdomain of the confirmed aed99.com", "High risk"),
+            ("app.u340cbye[.]xyz", "Never-seen family behind a bot challenge · invite code in the address · first certificate 87 days ago", "Caution"),
             ("bayt.com", "Legitimate UAE job board", "No strong signals"),
-            ("50 unseen legitimate pages", "Job boards, shops, gig and micro-task platforms not in training", "0 High · 0 Caution")]
-    tbl = s.shapes.add_table(len(rows), 3, Inches(0.6), Inches(1.85), Inches(12.1), Inches(4.2)).table
+            ("50 unseen legitimate pages", "Job boards, shops, gig and micro-task platforms not in training", "0 High · 0 Caution"),
+            ("38 legitimate sign-up pages", "Banks, telecoms, shops, job boards, gig, government, 5 referral links (31 loaded)", "0 High · 2 Caution")]
+    tbl = s.shapes.add_table(len(rows), 3, Inches(0.6), Inches(1.75), Inches(12.1), Inches(4.4)).table
     for j, wdt in enumerate((Inches(3.0), Inches(6.6), Inches(2.5))):
         tbl.columns[j].width = wdt
     for i, row in enumerate(rows):
-        tbl.rows[i].height = Inches(0.62 if i else 0.5)
+        tbl.rows[i].height = Inches(0.55 if i else 0.45)
         for j, val in enumerate(row):
             cell = tbl.cell(i, j)
             cell.fill.solid()
@@ -506,7 +508,7 @@ def s_live(prs, n):
             r.text = val
             col = WHITE if i == 0 else INK
             if i and j == 2:
-                col = RED if val == "High risk" else OK
+                col = RED if val == "High risk" else (AMBER if val == "Caution" else OK)
             r.font.size, r.font.bold, r.font.color.rgb, r.font.name = Pt(15 if j != 1 else 13), (i == 0 or j != 1), col, FONT
     text(s, Inches(0.6), Inches(6.3), Inches(12.1), Inches(0.6),
          "betnala and betfugu were never reviewed by us: they are caught by the seeded fingerprint of one confirmed case. "

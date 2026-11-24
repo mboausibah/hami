@@ -55,6 +55,13 @@ The domains are days old and get rebranded constantly, so blocklists are always 
 - **Sees through sign-in walls without signing in.** Scam portals are built from the same "kit". Hami fingerprints the files a site delivers (SHA-256, build-hashed names, near-identical similarity) and reads the strings inside its own JavaScript. A brand-new login page that runs the same software as a confirmed scam is flagged at once.
   - Example: aed99.com, betnala.com and betfugu.com share one build (26 identical files between aed99.com and betnala.com on a live scan).
   - A fresh install with no private data rates betnala.com and betfugu.com High through the seeded kit, and cs.aed99.com High through its confirmed domain.
+- **Reads registration walls of families it has never seen.** The signals:
+  - invite-gated sign-up and a separate "security password";
+  - money-flow routes the site's own pages and lazy code chunks reference;
+  - brand-bait logos;
+  - throw-away domains, using the first certificate from certificate transparency.
+
+  When a site blocks Hami's server with a bot challenge, the extension describes the page your browser shows (structure only, never what you typed).
 - **Warns where the link is met.** The toolbar button and right-click menu check any page. Google Search results get shields. A Google Maps listing is checked against the website it points to, so a mismatch is flagged.
 - **Checks automatically, with consent, without watching people.** An on-device pre-filter skips banks, government, health and well-known sites. Only likely scam pages are checked, and the badge and banner appear without a click.
 - **Explains every decision.** Each result has a tier (High risk / Caution / No strong signals / Insufficient evidence), up to three clues with the sentence or file that triggered them, and what to do now.
@@ -202,6 +209,16 @@ Several types have small samples, mostly synthetic, so read those as directional
 Other results:
 - **Unseen legitimate pages.** 50 UAE job boards, shops, gig and micro-task/survey platforms whose domains appear nowhere in training: **0 High, 0 Caution**. With 0/50 the 95% upper bound on the true false-alarm rate is about 6%. This is a small sample, not proof.
 - **System level.** On 111 legitimate pages, rules, delivered code and kit matching produced 0 false alarms. All 11 pages of the confirmed aed99 family were High.
+- **Brand-new scam sites (never trained, never reviewed): 1 of 1 flagged.** `python tasks.py eval-unseen` uses a private list of brand-new scam sites.
+  - The first is a task-scam registration page that answers automated browsers with a Cloudflare challenge. It used to be rated "No strong signals"; from the server alone it is now **Caution**: invite code in the address, first certificate 87 days ago, random-looking .xyz name.
+  - It is not High, because the money-flow routes and brand-bait logos of that kit appear only after login in the team's recording, and the domain is older than 30 days.
+  - The list is small and will grow; read it as a test case, not a rate.
+- **Legitimate sign-up and login pages: 0 High, 2 Caution of 31 loaded** (`python tasks.py eval-signup`).
+  - The 38 pages cover UAE bank onboarding, telecoms, shops, delivery, job boards, gig and micro-task platforms, government, and 5 referral-code links. Some of these domains appear in training through their homepages; their sign-up pages do not.
+  - All 5 referral links: neither High nor Caution.
+  - The 2 Cautions (GulfTalent and LinkedIn sign-up) come from the page classifier, not the new registration-wall rules. The phishing training data makes login forms look risky.
+  - 9 pages are "Insufficient evidence" (login walls, one bot challenge). 7 could not be loaded.
+- **The 50 unseen legitimate pages, re-scored with the new rules: 0 High, 0 Caution of 51 loaded.** 9 are now "Insufficient evidence", mostly bot challenges that were previously misread as clean pages.
 - **Where the model is weak.** Real sign-in-wall pages from our private sessions are caught by kit matching and domain inheritance, not by the text model (its recall on that small set is 0). That is why kit fingerprints exist.
 
 These are prototype results on our data, not estimates of accuracy on the open internet.
@@ -299,7 +316,7 @@ Principles:
 
 ## Acceptance checks
 
-Results from `python tasks.py check` (73 backend tests, 29 end-to-end checks, 35 extension checks in real
+Results from `python tasks.py check` (83 backend tests, 33 end-to-end checks, 38 extension checks in real
 Chromium), from a fresh clone, and from runs on real sites.
 
 | Feature | Status | How it was verified |
@@ -326,6 +343,10 @@ Chromium), from a fresh clone, and from runs on real sites.
 | Idle snapshot | Pass | Sent after 10 s idle. Stored as a metadata HAR artifact with SHA-256. Kit match with Site A. No query strings, cookies or e-mails stored. |
 | Investigator mode | Pass | Refused on a bank. Auto-saved after 10 s idle. The `.har` contains none of the planted cookie or token values. The SHA-256 matches, and the upload is verified server-side. |
 | False alarms on unseen legitimate pages | Pass | 0/50 (0 High, 0 Caution) on job boards, shops, gig and micro-task platforms not in training. The 95% upper bound is about 6%. |
+| Unseen scam family behind a bot challenge | Pass (Caution) | The registration page that was rated "No strong signals" is now Caution from the server alone: bot challenge recognized, invite code in the address, first certificate 87 days ago, random .xyz name. With the extension, the page structure from the user's browser is added (fictional site-f test: High). |
+| Registration walls, routes, chunks | Pass | Fictional site-e (invite-gated wall with a security password; task routes only in a lazy JS chunk the page never loads) is High with no reviewed case. A login wall with nothing else is never "No strong signals". |
+| Legitimate sign-up pages | 0 High | 31 loaded: 0 High, 2 Caution (page classifier, not the wall rules), 9 Insufficient evidence. All 5 referral-code links: neither High nor Caution. |
+| Gateways and template reuse | Pass | A `/code/<invite>` page that meta-refreshes to `/register/invite_code/<same code>` on another domain yields a strong pending "redirect / invitation gateway" link. Both domains become review candidates and are watched by the discovery worker. A second brand reusing a registration template gets a medium "same page template" link (template reuse, not common ownership). Both appear in the case brief. |
 | PostgreSQL | Pass | All backend tests and e2e checks pass on PostgreSQL 16. `docker compose --profile postgres` switches automatically. `migrate-to-postgres` copied 314 scans and 20,600 observations with all counts verified. |
 
 ## Data sources and licenses
@@ -356,7 +377,9 @@ Main open-source components:
 - Chrome extension + local server only. iOS/Android apps and a hosted server are roadmap. Reviewer decisions are not shared between installs, apart from the shipped seed indicators.
 - The live model was promoted manually. The automatic rule would have kept the synthetic model, because held-out FPR rose from 0.003 to 0.022 while recall rose from 0.21 to 0.83. The override and its reason are recorded.
 - Kit matching needs at least one confirmed site in the family. An entirely new kit behind a sign-in wall reaches High only if the classifier agrees on its delivered code; otherwise Caution.
-- Sites that hide content from automated browsers (cloaking) or block them get "Insufficient evidence", never "safe".
+- Sites that hide content from automated browsers (cloaking) or block them with a bot challenge get "Insufficient evidence" from the server, never "safe". Hami does not try to get past bot checks. The page structure the extension sends from the user's own browser is what fills that gap, so a server-only check of such a site sees less.
+- Scam kits that reveal their money-flow routes only after login look like ordinary sign-up walls to a visitor who has not registered. Hami then relies on the invite gate, the domain age and the address (Caution, not High).
+- The page classifier tends to score legitimate sign-up forms as risky, because login forms dominate the phishing training data. It produced 2 Cautions on 31 legitimate sign-up pages; the registration-wall rules produced none.
 - `STORAGE_URL=s3://…` is designed (`ArtifactStore`) but not implemented.
 - The Tranco-based skip list is for non-commercial use.
 

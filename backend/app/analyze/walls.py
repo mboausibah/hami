@@ -367,7 +367,10 @@ def analyze_wall(page_url: str, soups: list[Any], htmls: list[str], har: dict | 
 def wall_counts(w: dict[str, Any]) -> dict[str, Any]:
     """Which registration / route / domain signals are present (used by the tier rules and the clues)."""
     age = w.get("cert_age_days")
-    no_identity = w.get("registration_wall") and not w.get("company_identity")
+    # Behind a bot challenge (and no page structure from a browser) the page itself was never seen: what it lacks
+    # cannot be claimed.
+    unseen_page = w.get("bot_challenge") and not w.get("from_user_browser")
+    no_identity = w.get("registration_wall") and not w.get("company_identity") and not unseen_page
     sig = {
         "invite_gated": bool(w.get("invite_gated")),
         "security_password": bool(w.get("security_password")),
