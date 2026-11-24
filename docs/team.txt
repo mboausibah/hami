@@ -1,5 +1,3 @@
-[Full name] — Team lead and product
-[Full name] — Capture and backend
-[Full name] — Mobile and extension
-[Full name] — ML and evaluation
-[Full name] — Investigation and evidence
+Mohamed Al Ali — Team lead, investigation and development
+Omran Al Ali — Datasets and feature selection
+Abdulla AlDhawyani — Testing
