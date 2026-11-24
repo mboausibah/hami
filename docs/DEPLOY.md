@@ -13,6 +13,26 @@ profiles and `.env` change.
 Nothing in this guide has been deployed by the team yet. The steps are written for an **Azure for Students** VM in
 the **UAE North** region (Dubai), but any Linux VM with Docker works the same way.
 
+## 0. A public URL from a Windows PC (Cloudflare quick tunnel)
+
+The fastest way to give judges a live HTTPS address. It needs no account, no domain and no open ports: the PC makes
+an outbound connection to Cloudflare.
+
+```powershell
+# 1. Once: install cloudflared (official package)
+winget install --id Cloudflare.cloudflared -e
+# 2. Start Hami (port 8000; add $env:HAMI_PORT="8080" first if 8000 is taken)
+docker compose up -d --build
+# 3. Start the tunnel and keep this window open. It prints https://<random-words>.trycloudflare.com
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --no-autoupdate --url http://localhost:8000
+```
+
+Open the printed address. It shows the public check page; `/review` still asks for the reviewer token.
+
+- **A quick-tunnel address changes every time cloudflared restarts.** Keep it running, and stop the PC from sleeping. In PowerShell as administrator: `powercfg /change standby-timeout-ac 0` and `powercfg /change hibernate-timeout-ac 0`. Keep Docker Desktop set to start with Windows; the containers restart on their own (`restart: unless-stopped`).
+- For a permanent address, use a named tunnel with your own domain (`cloudflared tunnel login`, `create`, `route dns`, `run`) or the VM setup below.
+- Public scans are limited per IP and for the whole server (`RATE_SCANS_PER_IP_PER_MIN`, `RATE_SCANS_GLOBAL_PER_MIN`). Each scan runs in the sandboxed capture browser on this PC, which never signs in, submits forms or reaches private-network addresses.
+
 ## 1. Moving existing data to PostgreSQL (any machine)
 
 If you already ran Hami on SQLite and want to keep the data:

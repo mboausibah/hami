@@ -218,7 +218,8 @@ moment…"), and the challenge page itself was analyzed. Hami does not try to ge
 - **Checks the domain:** random-looking label, abused TLD (.xyz, .top, .shop, .vip, .cc…), and the age of the first certificate from certificate transparency (Cert Spotter, crt.sh fallback; cached; at least 2 s between queries). Under 30 days is strong, under 90 medium. The clue says "first certificate", not registration date.
 
 **Rules.**
-- **High:** invite gate or security password, plus one of: first certificate under 30 days, task route vocabulary, brand-bait logos, kit match.
+- **High:** an invite/referral gate AND a separate security/fund/withdrawal password field on the same registration page (the task-scam signature on its own); or an invite gate or security password plus one of: first certificate under 30 days, task route vocabulary, brand-bait logos, kit match.
+- **Timing:** page and URL signals decide immediately. The certificate-age lookup runs in the background (the scan waits `DOMAIN_AGE_WAIT_S`, default 0). Until it returns, the age is "not yet known", never clean. A cached result scored with older rules (`RULES_VERSION`) or with the lookup pending is re-scored from its stored capture on the next check.
 - **Caution:** two or more registration/route/domain signals, or a wall with a scam signal.
 - **Insufficient evidence:** a wall or challenge with nothing else.
 - A referral code on an established site with company identity cannot reach High on its own.

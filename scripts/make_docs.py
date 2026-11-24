@@ -518,7 +518,7 @@ def s_live(prs, n):
 
 def s_roadmap(prs, n):
     s = blank(prs)
-    title(s, "Roadmap", "This submission: Chrome extension + local backend, hosted database one command away")
+    title(s, "Roadmap", "This submission: Chrome extension + public check page, running on our server via a Cloudflare tunnel")
     phases = [("1", "Phones", "iOS and Android apps with share-to-app from WhatsApp and Messages, same bilingual card."),
               ("2", "Hosted service", "UAE North deployment, shared reviewer decisions, push alerts, role-based access."),
               ("3", "Coverage", "Screenshot OCR, more labeled kits (gambling, investment, parcel), Arabic look-alikes."),

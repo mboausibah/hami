@@ -24,7 +24,7 @@ services:
       TESTSITE_PORT: "8100"
     ports:
       # Local only by default; on a server Caddy proxies to it (docs/DEPLOY.md). HAMI_BIND=0.0.0.0 to expose.
-      - "${HAMI_BIND:-127.0.0.1}:8000:8000"
+      - "${HAMI_BIND:-127.0.0.1}:${HAMI_PORT:-8000}:8000"
     volumes:
       - hami-data:/data
     depends_on:

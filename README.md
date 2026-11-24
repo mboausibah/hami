@@ -14,6 +14,12 @@ roadmap, not in this submission.
 | ![High-risk result card](docs/screenshots/01_result_card_en.png) | ![Arabic result card](docs/screenshots/02_result_card_ar.png) |
 | ![Automatic check: badge and banner on a login wall](docs/screenshots/03_toolbar_badge.png) | ![Sign-in wall caught by kit matching](docs/screenshots/07_signin_wall_kit_match.png) |
 
+**Try it in a browser.** The public check page needs no install. Paste a link and get the same result card the
+extension shows, in Arabic or English. While the team's server is running, it is at the address given in the
+submission. Locally it is http://localhost:8000/. The reviewer console stays at `/review` behind its token.
+
+![Public check page](docs/screenshots/13_public_check_page.png)
+
 **Quick start.** Install Docker and Chrome, then:
 
 ```bash
@@ -127,7 +133,9 @@ The first build takes a few minutes. Nothing else is needed: no `.env` and no pr
 - **Model:** the committed trained model `m20261122-172703-full`.
 - **Seed indicators:** the team's reviewer-confirmed cases (`data/seed/indicators.json`) load automatically. They are marked "seeded from team review" in the console.
 - **PostgreSQL instead of SQLite:** `docker compose --profile postgres up` (see [docs/DEPLOY.md](docs/DEPLOY.md)).
-- **Port:** the API listens on 127.0.0.1 only.
+- **Port:** the API listens on 127.0.0.1 only, on port 8000. Set `HAMI_PORT=8080` (for example) if 8000 is taken.
+- **Public check page:** http://localhost:8000/. Paste a link, optionally add the business name from a listing, press Check. Public scans are limited per IP (`RATE_SCANS_PER_IP_PER_MIN`, default 8) and for the whole server (`RATE_SCANS_GLOBAL_PER_MIN`, default 40), so public testing cannot overload the capture browser.
+- **A public HTTPS address from your own PC:** `cloudflared tunnel --url http://localhost:8000`. See [docs/DEPLOY.md](docs/DEPLOY.md#0-a-public-url-from-a-windows-pc-cloudflare-quick-tunnel).
 
 ### Option B: without Docker
 
@@ -343,6 +351,9 @@ Chromium), from a fresh clone, and from runs on real sites.
 | Idle snapshot | Pass | Sent after 10 s idle. Stored as a metadata HAR artifact with SHA-256. Kit match with Site A. No query strings, cookies or e-mails stored. |
 | Investigator mode | Pass | Refused on a bank. Auto-saved after 10 s idle. The `.har` contains none of the planted cookie or token values. The SHA-256 matches, and the upload is verified server-side. |
 | False alarms on unseen legitimate pages | Pass | 0/50 (0 High, 0 Caution) on job boards, shops, gig and micro-task platforms not in training. The 95% upper bound is about 6%. |
+| Public check page | Pass | `GET /` serves a bilingual page with the extension's result card. On a fresh `docker compose up`, betnala.com and cs.aed99.com come back High and bayt.com "No strong signals". The same works through a Cloudflare quick tunnel. `/review` still requires the token. |
+| Signature pair | Pass | An invite gate plus a separate security/fund password field on one registration page is High on its own. Legitimate hold-outs re-scored: 38 sign-up pages 0 High (2 Caution from the page classifier), 50 pages 0 High / 0 Caution. |
+| Same answer on every check | Pass | Page and URL signals decide immediately. The certificate-age lookup runs in the background and shows as "not yet known" until it returns. Results scored with older rules, or with the lookup pending, are re-scored from the stored capture. The automatic check and "Check this page" give the same tier for the same URL (extension check). |
 | Unseen scam family behind a bot challenge | Pass (Caution) | The registration page that was rated "No strong signals" is now Caution from the server alone: bot challenge recognized, invite code in the address, first certificate 87 days ago, random .xyz name. With the extension, the page structure from the user's browser is added (fictional site-f test: High). |
 | Registration walls, routes, chunks | Pass | Fictional site-e (invite-gated wall with a security password; task routes only in a lazy JS chunk the page never loads) is High with no reviewed case. A login wall with nothing else is never "No strong signals". |
 | Legitimate sign-up pages | 0 High | 31 loaded: 0 High, 2 Caution (page classifier, not the wall rules), 9 Insufficient evidence. All 5 referral-code links: neither High nor Caution. |
