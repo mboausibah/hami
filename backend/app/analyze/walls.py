@@ -111,6 +111,9 @@ class WallSignals:
     bot_challenge: bool = False
     from_user_browser: bool = False
     cert_age_days: int | None = None                        # set by the pipeline (certificate transparency)
+    template_features: list[int] = field(default_factory=list)   # registration-page template (feature hashes)
+    template_lines: int = 0
+    template_sample: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         d = dict(self.__dict__)
@@ -350,6 +353,14 @@ def analyze_wall(page_url: str, soups: list[Any], htmls: list[str], har: dict | 
     w.scam_register_route = bool(SCAM_REGISTER_ROUTE_RE.search(u.path + ("#" + u.fragment if u.fragment else "")))
     w.h5_shell = w.h5_shell or any(H5_SHELL_RE.search(h[:400_000]) for h in htmls)
     w.random_label, w.abused_tld = domain_shape(host)
+    if w.registration_wall or (fields and words < 600):
+        from app.analyze.gateway import template_features
+        from app.sanitize import redact_text
+
+        actions = [f.get("action") or "" for soup in soups[:1] for f in soup.find_all("form")]
+        feats, n, sample = template_features(host, lines, fields, actions)
+        w.template_features, w.template_lines = feats, n
+        w.template_sample = [redact_text(x)[:120] for x in sample]
     return w
 
 

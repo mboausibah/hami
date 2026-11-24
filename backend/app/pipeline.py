@@ -235,6 +235,7 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
             from app.linking.kit import store_assets
 
             store_assets(conn, scan_id, an.page_host or scan["host"], an.assets, asset_source)
+            _store_linking_evidence(conn, scan_id, an, scan["host"])
             conn.execute(
                 "UPDATE scans SET page_lang=?, fingerprint=?, form_signature=?, payment_signature=? WHERE scan_id=?",
                 (an.lang, json.dumps(an.fingerprint) if an.fingerprint else None, an.form_signature or None,
@@ -268,7 +269,9 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
                              "strong_links": ctx.strong_links, "partial_links": ctx.partial_links,
                              "domain_inherited": ctx.domain_inherited, "live_failure": live_failure,
                              "code_mentions": an.code_mentions, "code_behaviors": an.code_behaviors,
-                             "wall": {k: v for k, v in (an.wall or {}).items() if k not in ("paths", "images")}},
+                             "wall": {k: v for k, v in (an.wall or {}).items()
+                                      if k not in ("paths", "images", "template_features")},
+                             "redirect": an.redirect},
                             ensure_ascii=False),
                  an.identity.get("result", "not_checked"), json.dumps(phrases, ensure_ascii=False), version, utcnow(),
                  code_score))
@@ -468,3 +471,23 @@ def _add_domain_age(an: Analysis, host: str) -> None:
                                        host_ref=registrable_domain(an.page_host or host), source="domain",
                                        excerpt=f"first certificate {age} days ago",
                                        details={"cert_age_days": age, "source": "certificate transparency"}))
+
+
+def _store_linking_evidence(conn: Any, scan_id: int, an: Analysis, host: str) -> None:
+    """Registration-page template (feature hashes only) and redirect/invite gateways as review candidates."""
+    w = an.wall or {}
+    page_host = an.page_host or host
+    if w.get("template_features"):
+        conn.execute("INSERT INTO page_templates (scan_id, host, site, features, n_lines, created_at) VALUES (?,?,?,?,?,?) "
+                     "ON CONFLICT DO NOTHING", (scan_id, page_host, registrable_domain(page_host),
+                                                json.dumps(w["template_features"]), w.get("template_lines") or 0, utcnow()))
+    g = an.redirect
+    if g:
+        for domain, role in ((g["gateway_site"], "gateway"), (g["target_site"], "landing site")):
+            conn.execute(
+                "INSERT INTO discovered_domains (domain, source, first_seen_at, matched_pattern, evidence, scan_id, status, "
+                "status_note, updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+                (domain, "redirect_gateway", utcnow(), f"redirect_gateway:{role}",
+                 json.dumps({"scan_id": scan_id, "role": role, "mechanism": g["mechanism"], "invite_code": g["invite_code"],
+                             "gateway": g["gateway_host"], "target": g["target_host"]}),
+                 scan_id, "scanned", f"{role} of a redirect/invitation gateway; review candidate", utcnow()))

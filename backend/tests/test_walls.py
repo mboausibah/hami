@@ -122,3 +122,71 @@ def test_bot_challenge_then_browser_signals(sites):
     # Signals for a different site are ignored.
     other = submit_scan(url, "extension", page_signals=dict(signals, page_url="https://elsewhere.example/"))
     assert other["tier"] == server_only["tier"]
+
+
+def test_gateway_detection_unit():
+    from app.analyze.gateway import detect_gateway
+
+    har = {"log": {"entries": [{"request": {"url": "https://go.k2gw9x.xyz/code/AB12CD", "method": "GET"},
+                                "response": {"status": 200, "headers": [], "content": {
+                                    "mimeType": "text/html",
+                                    "text": '<meta http-equiv="refresh" content="0;url=https://app.m7q3zt.xyz/index/user/'
+                                            'register/invite_code/AB12CD.html">'}}}]}}
+    g = detect_gateway("https://go.k2gw9x.xyz/code/AB12CD",
+                       "https://app.m7q3zt.xyz/index/user/register/invite_code/AB12CD.html", har, True, True)
+    assert g["mechanism"] == "meta_refresh" and g["invite_code"] == "AB12CD" and g["gateway_site"] == "k2gw9x.xyz"
+    # An ordinary cross-domain redirect to a content page with no wall, no signals and no shared code is not a gateway.
+    assert detect_gateway("https://example-brand.com/", "https://www.example-brand.ae/en/", None, False, False) is None
+
+
+def test_template_reuse_similarity():
+    from pathlib import Path
+
+    from app.analyze.gateway import template_similarity
+    from app.config import REPO_DIR
+
+    base = Path(REPO_DIR) / "testsites/sites"
+    e = (base / "site-e/index/user/register/invite_code/QV7K2M.html").read_text(encoding="utf-8")
+    h = (base / "site-h/index/user/register/invite_code/HB4T9W.html").read_text(encoding="utf-8")
+    ae = analyze(AnalyzerInput(page_url="https://a.example/r", final_url="https://a.example/r", steps=[(0, "load", e)]))
+    ah = analyze(AnalyzerInput(page_url="https://b.example/r", final_url="https://b.example/r", steps=[(0, "load", h)]))
+    generic = ("<html><head><title>Login</title></head><body><h1>Welcome back</h1><form><input name='email'>"
+               "<input type='password' name='password'></form><p>Forgot your password?</p></body></html>")
+    ag = analyze(AnalyzerInput(page_url="https://c.example/login", final_url="https://c.example/login", steps=[(0, "load", generic)]))
+    sim, shared = template_similarity(ae.wall["template_features"], ah.wall["template_features"])
+    assert sim >= 0.5 and shared >= 10, (sim, shared)
+    assert not ag.wall["template_features"]  # boilerplate-only login page has no distinctive template
+
+
+def test_gateway_and_template_links(sites):
+    import json
+
+    from app.db import db
+    from app.linking.brief import brief_markdown, build_brief
+    from app.pipeline import submit_scan
+
+    e = submit_scan(sites("site-e/index/user/register/invite_code/QV7K2M.html"), "extension", force=True)
+    g = submit_scan(sites("site-g/code/QV7K2M.html"), "extension", force=True)
+    assert g["tier"] == "high_risk"
+    with db() as conn:
+        gl = conn.execute("SELECT * FROM links WHERE relation_type='redirect_gateway' AND host_a='site-g.localhost'").fetchone()
+        cands = {r["domain"]: r["matched_pattern"] for r in conn.execute(
+            "SELECT domain, matched_pattern FROM discovered_domains WHERE source='redirect_gateway'")}
+    assert gl is not None and gl["host_b"] == "site-e.localhost" and gl["strength"] == "strong"
+    sig = json.loads(gl["evidence_json"])[0]
+    assert "meta-refresh" in sig["detail"] and "QV7K2M" in sig["detail"] and sig["artifact_ids"]
+    assert cands.get("site-g.localhost") == "redirect_gateway:gateway" and "site-e.localhost" in cands
+    h = submit_scan(sites("site-h/index/user/register/invite_code/HB4T9W.html"), "extension", force=True)
+    with db() as conn:
+        tl = conn.execute("SELECT * FROM links WHERE relation_type IN ('page_template','same_template') AND "
+                          "((host_a='site-e.localhost' AND host_b='site-h.localhost') OR "
+                          "(host_a='site-h.localhost' AND host_b='site-e.localhost'))").fetchone()
+        wrong = conn.execute("SELECT 1 FROM links WHERE relation_type='page_template' AND "
+                             "(host_a='site-g.localhost' OR host_b='site-g.localhost')").fetchone()
+        md = brief_markdown(build_brief(conn, e["scan_id"]))
+    assert tl is not None and tl["strength"] == "medium" and tl["review_status"] == "pending"
+    tsig = [x for x in json.loads(tl["evidence_json"]) if x["relation"] == "page_template"]
+    assert tsig and "template reuse, not common ownership" in tsig[0]["detail"]
+    assert wrong is None, "the gateway itself does not inherit the landing page's template"
+    assert h["tier"] in ("high_risk", "caution")
+    assert "redirect / invitation gateway" in md or "same page template" in md

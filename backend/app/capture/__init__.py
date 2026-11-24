@@ -288,9 +288,8 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                     cl = 0
                 state["bytes"] += cl
                 state["loaded"].add(r.url.split("#")[0])
-                if (r.request.resource_type == "script" and len(state["scripts"]) < 60
-                        and registrable_domain(urlsplit(r.url).hostname or "") == start_site):
-                    state["scripts"].append(r)
+                if r.request.resource_type == "script" and len(state["scripts"]) < 80:
+                    state["scripts"].append(r)  # filtered by the final page's site when chunks are fetched
 
             page.on("response", on_response)
 
@@ -375,7 +374,9 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                             log("action_failed", kind=kind, error=str(e).splitlines()[0][:200])
                 res.final_url = _http_url(page.url, res.final_url or url)
             if res.status == "ok" and budget.left() > 2:
-                await _fetch_chunks(context, page, state, start_site, allow_hosts, allow_private, budget, log)
+                # Chunks of the site the page ended on (after any redirect / invitation gateway).
+                final_site = registrable_domain(urlsplit(res.final_url or url).hostname or "") or start_site
+                await _fetch_chunks(context, page, state, final_site, allow_hosts, allow_private, budget, log)
             res.request_count = state["requests"]
             await context.close()
         finally:
@@ -439,6 +440,8 @@ async def _fetch_chunks(context, page, state: dict, start_site: str, allow_hosts
     max_files, max_bytes, gap = settings.chunk_fetch_max_files, settings.chunk_fetch_max_bytes, settings.chunk_fetch_gap_s
     queue: list[str] = []
     for r in state["scripts"]:
+        if registrable_domain(urlsplit(r.url).hostname or "") != start_site:
+            continue
         try:
             body = await r.text()
         except PWError:

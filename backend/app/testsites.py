@@ -46,6 +46,22 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         self.send_error(404)
         return None
 
+    def send_head(self):  # noqa: ANN201
+        # Cross-site test pages (e.g. a gateway's meta-refresh) need absolute URLs with this server's port.
+        path = self.translate_path(self.path)
+        if path.endswith((".html", ".htm")) and Path(path).is_file():
+            raw = Path(path).read_bytes()
+            if b"{{PORT}}" in raw:
+                data = raw.replace(b"{{PORT}}", str(self.server.server_address[1]).encode())
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                import io
+
+                return io.BytesIO(data)
+        return super().send_head()
+
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         super().end_headers()

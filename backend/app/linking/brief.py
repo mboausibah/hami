@@ -13,6 +13,7 @@ from typing import Any
 from app import cases
 from app.db import utcnow
 from app.linking.clusters import cluster_of
+from app.scoring import texts as T
 from app.urls import defang
 
 OBS_TYPES = ("deposit_to_unlock", "advance_fee", "commission_transfer", "credential_request", "gambling_deposit",
@@ -136,7 +137,8 @@ def brief_markdown(b: dict[str, Any]) -> str:
         L.append("No proposed or approved links.")
     for l in b["links"]:
         L.append(f"### Link {l['link_id']}: `{l['between'][0]}` ↔ `{l['between'][1]}`")
-        L.append(f"- Relation: **{l['relation_type']}** · confidence **{l['confidence']}** · review status **{l['review_status']}**"
+        label = T.RELATION_TEXT.get(l["relation_type"], {}).get("en", "")
+        L.append(f"- Relation: **{l['relation_type']}**{f' ({label})' if label else ''} · confidence **{l['confidence']}** · review status **{l['review_status']}**"
                  + (f" ({l['reviewed_at']})" if l["reviewed_at"] else ""))
         for e in l["evidence"]:
             L.append(f"- [{e['strength']}] {e['relation']}: {e['detail']} (observations {e['observation_ids'] or '-'})")

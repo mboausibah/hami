@@ -1,9 +1,12 @@
 """Related-site linking.
 
 Signals (proposal, Part 4):
+  redirect / invitation gateway (X -> Y)     -> strong (same invite code on both sides strengthens it)
   registration destination in captured JSON  -> strong
   distinctive asset host                     -> strong
   same page template (layout + form fields)  -> medium
+  same registration-page template (wording + form structure; template reuse, not common ownership) -> medium,
+                                             proposes a link on its own
   same payment script (amounts + steps)      -> medium
   shared common service                      -> weak, never links alone
 A pair becomes a candidate with one strong signal, or two medium signals from different artifacts.
@@ -28,8 +31,9 @@ MAX_COMPARE_HOSTS = 3000
 FRAUD_INDICATORS = ("deposit_to_unlock", "advance_fee", "commission_transfer", "gambling_deposit", "investment_promise",
                     "credential_request", "deposit_request", "vip_table", "invitation_code", "withdrawal_condition",
                     "commission_rate", "off_platform_contact", "code_behavior")
-RELATION_ORDER = ("same_kit", "registration_destination", "asset_host", "shared_infrastructure", "same_template",
-                  "same_payment_script", "infrastructure_pattern")
+RELATION_ORDER = ("same_kit", "redirect_gateway", "registration_destination", "asset_host", "shared_infrastructure",
+                  "same_template", "page_template", "same_payment_script", "infrastructure_pattern")
+TEMPLATE_REUSE_SIM, TEMPLATE_REUSE_MIN_SHARED, TEMPLATE_GENERIC_SITES = 0.5, 10, 6
 
 
 def dynamic_common_hosts(conn: sqlite3.Connection, min_sites: int = DYNAMIC_COMMON_MIN_SITES) -> set[str]:
@@ -52,8 +56,12 @@ def _scan_profile(conn: sqlite3.Connection, scan_id: int) -> dict[str, Any] | No
         "fingerprint": json.loads(s["fingerprint"]) if s["fingerprint"] else [],
         "form_signature": s["form_signature"], "payment_signature": s["payment_signature"],
         "html_artifact": html0["artifact_id"] if html0 else None,
-        "reg": {}, "assets": {}, "common": {}, "fraud": [], "payment_obs": [],
+        "reg": {}, "assets": {}, "common": {}, "fraud": [], "payment_obs": [], "template": [],
     }
+    t = conn.execute("SELECT features, host FROM page_templates WHERE scan_id IN (?, ?) ORDER BY scan_id DESC LIMIT 1",
+                     (scan_id, s["stored_from_scan_id"] or scan_id)).fetchone()
+    if t and t["host"] == s["host"]:  # a gateway scan's landing page belongs to the landing site, not the gateway
+        prof["template"] = json.loads(t["features"])
     for o in obs:
         t = o["indicator_type"]
         if t == "registration_destination":
@@ -90,8 +98,18 @@ def compare(a: dict[str, Any], b: dict[str, Any], common: set[str]) -> list[dict
     sim = fingerprint_similarity(a["fingerprint"], b["fingerprint"])
     if sim >= TEMPLATE_SIM and a["form_signature"] and a["form_signature"] == b["form_signature"]:
         signals.append({"relation": "same_template", "strength": "medium",
-                        "detail": f"layout fingerprint similarity {sim:.2f} and identical form fields",
+                        "detail": f"layout fingerprint similarity {sim:.2f} and identical form fields; template reuse, "
+                                  "not common ownership",
                         "obs_ids": [], "artifact_ids": sorted(x for x in (a["html_artifact"], b["html_artifact"]) if x)})
+    if a.get("template") and b.get("template") and not a.get("template_generic") and not b.get("template_generic"):
+        from app.analyze.gateway import template_similarity
+
+        tsim, shared = template_similarity(a["template"], b["template"])
+        if tsim >= TEMPLATE_REUSE_SIM and shared >= TEMPLATE_REUSE_MIN_SHARED:
+            signals.append({"relation": "page_template", "strength": "medium", "standalone": True,
+                            "detail": f"same registration-page template: {shared} shared distinctive wording/structure "
+                                      f"features (similarity {tsim:.2f}); template reuse, not common ownership",
+                            "obs_ids": [], "artifact_ids": sorted(x for x in (a["html_artifact"], b["html_artifact"]) if x)})
     if a["payment_signature"] and a["payment_signature"] == b["payment_signature"]:
         obs = a["payment_obs"] + b["payment_obs"]
         signals.append({"relation": "same_payment_script", "strength": "medium",
@@ -106,7 +124,7 @@ def compare(a: dict[str, Any], b: dict[str, Any], common: set[str]) -> list[dict
 
 
 def is_candidate(signals: list[dict[str, Any]]) -> bool:
-    if any(s["strength"] == "strong" for s in signals):
+    if any(s["strength"] == "strong" or s.get("standalone") for s in signals):
         return True
     medium = [s for s in signals if s["strength"] == "medium"]
     if len(medium) >= 2:
@@ -129,6 +147,9 @@ def process_scan(scan_id: int) -> list[int]:
         if common_service_category(new["host"]):
             return created
         common = dynamic_common_hosts(conn)
+        created += _gateway_link(conn, scan_id, new)
+        if new["template"]:
+            new["template_generic"] = _template_is_generic(conn, new)
         from app.linking.kit import infra_signals, kit_matches
 
         kits = {k.site: k for k in kit_matches(conn, scan_id)}
@@ -234,3 +255,50 @@ def alerts_for_new_watch(conn: sqlite3.Connection, host: str) -> list[int]:
         out.extend(_pending_alerts_for_link(conn, l["link_id"]))
     return out
 
+
+
+def _template_is_generic(conn: sqlite3.Connection, prof: dict[str, Any]) -> bool:
+    """A template shared by many unrelated sites is boilerplate (a common builder), not a kit: never links."""
+    from app.analyze.gateway import template_similarity
+
+    sites = set()
+    for r in conn.execute("SELECT site, features FROM page_templates WHERE site<>? ORDER BY scan_id DESC LIMIT 3000",
+                          (prof["site"],)):
+        tsim, shared = template_similarity(prof["template"], json.loads(r["features"]))
+        if tsim >= TEMPLATE_REUSE_SIM and shared >= TEMPLATE_REUSE_MIN_SHARED:
+            sites.add(r["site"])
+            if len(sites) > TEMPLATE_GENERIC_SITES:
+                return True
+    return False
+
+
+def _gateway_link(conn: sqlite3.Connection, scan_id: int, prof: dict[str, Any]) -> list[int]:
+    """Link the gateway domain X to the landing site Y seen in the same capture (strong, pending review)."""
+    obs = conn.execute("SELECT * FROM observations WHERE scan_id=? AND indicator_type='redirect_gateway' "
+                       "ORDER BY obs_id LIMIT 1", (scan_id,)).fetchone()
+    if obs is None:
+        return []
+    g = json.loads(obs["details_json"] or "{}")
+    hx, hy = g.get("gateway_host"), g.get("target_host")
+    if not hx or not hy:
+        return []
+    exists = conn.execute("SELECT 1 FROM links WHERE review_status IN ('pending','approved') AND "
+                          "((host_a=? AND host_b=?) OR (host_a=? AND host_b=?))", (hx, hy, hy, hx)).fetchone()
+    if exists:
+        return []
+    how = {"http_redirect": "an HTTP redirect", "meta_refresh": "an HTML meta-refresh",
+           "script_redirect": "a script redirect"}.get(g.get("mechanism"), "a redirect")
+    detail = f"capture started on {hx}{g.get('gateway_url_path', '')} and reached {hy} through {how}"
+    if g.get("invite_code"):
+        detail += f"; the same invite code ({g['invite_code']}) appears in both addresses"
+    signal = {"relation": "redirect_gateway", "strength": "strong", "detail": detail, "obs_ids": [obs["obs_id"]],
+              "artifact_ids": [obs["artifact_id"]] if obs["artifact_id"] else _har_artifacts(conn, scan_id),
+              "invite_code_match": bool(g.get("invite_code"))}
+    with tx(conn):
+        lid = conn.execute(
+            "INSERT INTO links (scan_a, scan_b, host_a, host_b, relation_type, strength, evidence_obs_ids, evidence_json, "
+            "review_status, created_at) VALUES (?,?,?,?,?,?,?,?, 'pending', ?)",
+            (scan_id, scan_id, hx, hy, "redirect_gateway", "strong", json.dumps([obs["obs_id"]]), json.dumps([signal]),
+             utcnow())).lastrowid
+    _pending_alerts_for_link(conn, lid)
+    return [lid]

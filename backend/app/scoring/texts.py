@@ -240,3 +240,9 @@ def wall_phrases(clue_type: str, w: dict) -> tuple[str, str]:
         return (f"The address ends in .{tld}, an ending often used by short-lived scam sites.",
                 f"ينتهي العنوان بـ .{tld} وهو امتداد تستخدمه كثيرًا مواقع احتيال قصيرة العمر.")
     return "", ""
+
+RELATION_TEXT.update({
+    "redirect_gateway": {"en": "redirect / invitation gateway", "ar": "بوابة تحويل أو دعوة"},
+    "page_template": {"en": "same page template (template reuse, not common ownership)",
+                      "ar": "نفس قالب صفحة التسجيل (إعادة استخدام قالب، وليس دليلًا على ملكية مشتركة)"},
+})

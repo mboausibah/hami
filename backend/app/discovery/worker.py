@@ -63,6 +63,18 @@ def load_patterns(conn=None) -> dict[str, Any]:  # noqa: ANN001
                 m = re.match(r"^([a-z]{3,})-?(vip|gl|mall|shop|global|uae|task|order)\d*$", label)
                 if m:
                     terms.append(m.group(1) + "-" + m.group(2))
+    watched: list[str] = []
+    if conn is not None:
+        # Redirect / invitation gateways and the sites they lead to: new certificates under either domain are watched.
+        for r in conn.execute("SELECT host_a, host_b FROM links WHERE relation_type='redirect_gateway' "
+                              "AND review_status IN ('pending','approved')"):
+            for h in (r["host_a"], r["host_b"]):
+                d = registrable_domain(h)
+                if d and not h.endswith(".localhost") and d not in watched:
+                    watched.append(d)
+                    cfg["name_patterns"].append({"name": f"watched_gateway:{d}",
+                                                 "regex": r"(^|\.)" + re.escape(d) + "$"})
+    reviewed_domains += watched
     for term in dict.fromkeys(terms):
         safe = re.escape(term.lower())
         cfg["name_patterns"].append({"name": f"reviewed_case_term:{term}", "regex": safe.replace(r"\-", "-?")})

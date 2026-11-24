@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Synthetic test page (fictional brand "Larkspur Deals"): an invite-gated registration wall used by Hami's
+     automated tests. Mirrors the structure of task-scam sign-up pages; no real brand, no real data. -->
+<html lang="en"><head><meta charset="utf-8"><title>Mobile registration</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:system-ui,sans-serif;background:#10131a;color:#e9eef5;max-width:420px;margin:40px auto;padding:0 16px}
+input{display:block;width:100%;margin:8px 0 14px;padding:10px;border-radius:8px;border:1px solid #333;background:#1b2030;color:#fff}
+button{width:100%;padding:12px;border:0;border-radius:8px;background:#e0a100;font-weight:700}</style></head>
+<body>
+<h2>Larkspur Deals</h2>
+<p>Create your account</p>
+<p>Your journey to daily rewards starts with every order you grab.</p>
+<p>Partner entrance for verified members only.</p>
+<p>Complete three rounds and unlock the golden lounge.</p>
+<form id="reg" action="/index/user/do_register" method="post">
+  <label for="tel">Phone number</label>
+  <div><span>+971</span><input id="tel" name="tel" type="tel" placeholder="Enter mobile number" maxlength="11" required></div>
+  <label for="pwd">Login password</label>
+  <input id="pwd" name="pwd" type="password" placeholder="Login password" required>
+  <label for="paypwd">Security password</label>
+  <input id="paypwd" name="paypassword" type="password" placeholder="Security password (for withdrawals)" required>
+  <label for="invite">Invitation code</label>
+  <input id="invite" name="invite_code" type="text" value="HB4T9W" readonly required>
+  <button type="submit">Register</button>
+</form>
+<p><a href="/index/user/login.html">Login</a></p>
+<p>Copyright (c) 2026</p>
+</body></html>

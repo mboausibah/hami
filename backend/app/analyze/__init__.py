@@ -85,6 +85,7 @@ class Analysis:
     code_mentions: dict[str, int] = field(default_factory=dict)
     code_features: dict[str, float] = field(default_factory=dict)
     wall: dict[str, Any] = field(default_factory=dict)     # registration wall, routes, brand bait, domain shape
+    redirect: dict[str, Any] | None = None                  # redirect / invitation gateway (domain X -> Y)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -407,6 +408,7 @@ def analyze(inp: AnalyzerInput) -> Analysis:
         an.flags["cloaking_suspected"] = False
         an.flags["thin_content"] = False
     _wall_indicators(an, inp, soups, lines_by_step, bool(company), client, bot_challenge)
+    _gateway_indicator(an, inp)
 
     types = {i.type for i in an.indicators}
     an.behaviors = [b for b in STRONG_BEHAVIORS + OTHER_BEHAVIORS
@@ -573,3 +575,20 @@ def urlsplit_path(url: str) -> str:
     from urllib.parse import urlsplit
 
     return urlsplit(url).path
+
+
+def _gateway_indicator(an: Analysis, inp: AnalyzerInput) -> None:
+    """Capture started on domain X and the scored page is on domain Y (redirect / meta-refresh / script)."""
+    from app.analyze.gateway import detect_gateway
+    from app.analyze.walls import wall_counts
+
+    landing_signals = bool(an.behaviors) or any(v for k, v in wall_counts(an.wall or {}).items() if k != "domain_shape")
+    g = detect_gateway(inp.page_url, inp.final_url or "", inp.har, bool((an.wall or {}).get("registration_wall")),
+                       landing_signals)
+    if not g:
+        return
+    an.redirect = g
+    an.indicators.append(Indicator(
+        type="redirect_gateway", strength="strong", host_ref=g["gateway_host"], host_relation="observed",
+        context=f"traffic:{g['mechanism']}", source="traffic",
+        excerpt=f"{g['gateway_host']}{g['gateway_url_path']} -> {g['target_host']}"[:200], details=g))
