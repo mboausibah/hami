@@ -220,13 +220,24 @@ Principles:
 - A pre-filter classifies every page locally:
   - sensitive categories (banks, government, health, e-mail, …) are skipped;
   - well-known sites (Tranco top 10,000 + allowlist) are skipped;
-  - pages matching the local lists or kit file names become candidates.
+  - every other page is a candidate; recent certificates and kit file names are noted as extra reasons.
 - Confirmed sites show a red banner from the local list with no server call.
 
 **Automatic checking (needs one-time consent):**
 - A bilingual consent screen opens on install. Until the user agrees, nothing is checked automatically. It can be turned off in Options at any time.
-- Only candidate pages are checked, and only their URL is sent: at most 30 per hour, each host at most once every 6 hours.
+- Only candidate pages are checked: at most 30 per hour, each host at most once every 6 hours.
 - Every checked tab gets a colored toolbar badge. A full-page banner appears only for High risk.
+
+**Page structure (with "Check this page" and with consented automatic checks):**
+- Many scam sites show Hami's server a bot challenge instead of their page. Hami does not try to get past these. Instead, the extension describes the page your browser already shows. This is computed on the device from the page's HTML and inline scripts only; nothing is fetched, clicked or submitted.
+- Sent with the URL:
+  - same-site paths the page links to or mentions, without query strings;
+  - image file names;
+  - form-field descriptors (type, name, placeholder, label, required/read-only, and whether a non-password field arrived pre-filled);
+  - the page title and visible text, with e-mails and phone numbers redacted.
+- Never sent: what you typed, field values (for password fields not even whether they are filled), cookies, storage, query strings.
+- Never collected on sites the pre-filter skips (banks, government, health, well-known sites).
+- The server checks that the description belongs to the same site, keeps it as evidence, and never re-uses that result for anyone else's check.
 
 **Idle snapshot (consent + Options toggle):**
 - Taken after 10 seconds without activity on a candidate page, at most once per page load. Rate-limited per device on the server.
@@ -249,6 +260,15 @@ Principles:
 
 **Capture security:**
 - The capture browser never signs in, submits forms, pays, downloads files, or follows discovered links.
+- After the page has loaded, the capture may fetch extra code files the page's own scripts reference but did not request (lazy route chunks, language packs). The rules:
+  - same site as the page it ended on;
+  - only `.js` / `.mjs` / `.json` files (JSON only from static, asset or locale folders);
+  - GET only, no redirects followed;
+  - never HTML, never paths under `/api`, `/admin`, `/user`, `/account`, `/auth`, `/login`, `/pay`, `/order`;
+  - at most 30 files and 10 MB per capture, 0.15 s apart, inside the capture's time limit.
+
+  These files are sanitized and hashed like everything else, then read as delivered code and kit fingerprints.
+- Domain age: the server asks public certificate-transparency services (Cert Spotter, crt.sh) when the domain's first certificate was issued. Answers are cached (7 days, 1 day after a failure) and queries are at least 2 s apart. Local and IP hosts are never looked up.
 - Discovery is rate-limited. Discovered domains are review candidates and are never labeled fraudulent without a reviewer.
 
 **Stored data:**

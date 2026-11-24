@@ -156,6 +156,17 @@ def t_eval_holdout(a: list[str]) -> None:
     py("-m", "ml.eval_holdout", *a)
 
 
+def t_eval_unseen(a: list[str]) -> None:
+    """brand-new scam sites (data/private/datasets/unseen_scams.csv, never trained): X of Y flagged"""
+    py("-m", "ml.eval_unseen", *a)
+
+
+def t_eval_signup(a: list[str]) -> None:
+    """false alarms on legitimate sign-up / login pages (ml/holdout_signup_urls.csv)"""
+    py("-m", "ml.eval_holdout", "--list", "ml/holdout_signup_urls.csv", "--batch", "holdout_signup", "--keep-trained",
+       "--target", "1000", "--report", "holdout_signup_report.json", *a)
+
+
 def t_tier_check(a: list[str]) -> None:
     """system-level tiers on a copy of the database"""
     py("-m", "ml.tier_check", "--show", *a)

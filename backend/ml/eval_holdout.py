@@ -57,20 +57,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--target", type=int, default=50)
     ap.add_argument("--gap", type=float, default=6.0, help="seconds between captures")
     ap.add_argument("--rescore", action="store_true")
+    ap.add_argument("--list", default=str(LIST), help="CSV with category,url")
+    ap.add_argument("--batch", default="holdout_legit", help="scan batch name (never read by the importer)")
+    ap.add_argument("--keep-trained", action="store_true",
+                    help="keep sites whose domain appears in training (reported per row) instead of dropping them")
+    ap.add_argument("--report", default="holdout_report.json")
     args = ap.parse_args(argv)
 
-    rows = list(csv.DictReader(LIST.open(encoding="utf-8")))
+    rows = list(csv.DictReader(Path(args.list).open(encoding="utf-8")))
     seen = training_domains()
     well_known = set(json.loads(WELL_KNOWN.read_text(encoding="utf-8"))["domains"]) if WELL_KNOWN.is_file() else set()
-    excluded = [r["url"] for r in rows if registrable_domain(hostname(r["url"])) in seen]
+    trained = {r["url"] for r in rows if registrable_domain(hostname(r["url"])) in seen}
+    excluded = [] if args.keep_trained else sorted(trained)
     todo = [r for r in rows if r["url"] not in excluded]
     print(f"{len(rows)} candidates, {len(excluded)} excluded (domain already in training), {len(todo)} eligible")
 
     results = []
     if args.rescore:
         with db() as conn:
-            stored = conn.execute("SELECT MAX(scan_id) AS sid, submitted_url FROM scans WHERE batch='holdout_legit'"
-                                  " GROUP BY submitted_url").fetchall()
+            stored = conn.execute("SELECT MAX(scan_id) AS sid, submitted_url FROM scans WHERE batch=?"
+                                  " GROUP BY submitted_url", (args.batch,)).fetchall()
         cat = {r["url"]: r["category"] for r in rows}
         for s in stored:
             if s["submitted_url"] in excluded:
@@ -81,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         # Reuse earlier captures of this hold-out set (re-scored with the current model); visit only new sites.
         with db() as conn:
             stored = {r["submitted_url"]: r["sid"] for r in conn.execute(
-                "SELECT MAX(scan_id) AS sid, submitted_url FROM scans WHERE batch='holdout_legit' GROUP BY submitted_url")}
+                "SELECT MAX(scan_id) AS sid, submitted_url FROM scans WHERE batch=? GROUP BY submitted_url",
+                (args.batch,))}
         ok = 0
         for r in todo:
             if ok >= args.target:
@@ -92,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
                 ok += p["capture_status"] == "ok" and p["tier"] != INSUFFICIENT
                 continue
             try:
-                p = submit_scan(r["url"], "manual", batch="holdout_legit", force=True)
+                p = submit_scan(r["url"], "manual", batch=args.batch, force=True)
             except ScanError as e:
                 print(f"  refused {r['url']}: {e}")
                 continue
@@ -102,8 +109,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [{ok:>2}] {r['category']:<9} {p['tier'] or '-':<18} {p['capture_status']:<10} {r['url']}")
             time.sleep(args.gap)
 
-    evaluated = [(c, u, p) for c, u, p in results if p["capture_status"] == "ok" and p["tier"] != INSUFFICIENT]
-    failed = [(c, u, p["capture_status"], p["tier"]) for c, u, p in results if (c, u, p) not in evaluated]
+    # Pages that loaded: every tier counts (Insufficient evidence is the honest answer for many sign-up walls).
+    loaded = [(c, u, p) for c, u, p in results if p["capture_status"] == "ok"]
+    evaluated = [(c, u, p) for c, u, p in loaded if p["tier"] != INSUFFICIENT]
+    failed = [(c, u, p["capture_status"], p["tier"]) for c, u, p in results if p["capture_status"] != "ok"]
     tiers = Counter(p["tier"] for _, _, p in evaluated)
     n = len(evaluated)
     by_cat: dict[str, Counter] = {}
@@ -113,7 +122,14 @@ def main(argv: list[str] | None = None) -> int:
                 "clues": [cl["text"]["en"] for cl in p.get("clues", [])][:4],
                 "skipped_by_extension": registrable_domain(hostname(u)) in well_known}
                for c, u, p in evaluated if p["tier"] in ("high_risk", "caution")]
+    loaded_tiers = Counter(p["tier"] for _, _, p in loaded)
+    rows_out = [{"category": c, "url": u, "tier": p["tier"], "capture_status": p["capture_status"],
+                 "rules_fired": p["rules_fired"], "domain_in_training": u in trained} for c, u, p in results]
     report = {
+        "list": Path(args.list).name, "batch": args.batch,
+        "loaded_pages": len(loaded), "loaded_tiers": dict(loaded_tiers),
+        "high_on_loaded": loaded_tiers["high_risk"], "caution_on_loaded": loaded_tiers["caution"],
+        "rows": rows_out,
         "model_version": evaluated[0][2].get("model_version") if evaluated else None,
         "evaluated_pages": n, "capture_failed_or_insufficient": len(failed),
         "excluded_in_training": len(excluded), "tiers": dict(tiers), "by_category": {k: dict(v) for k, v in by_cat.items()},
@@ -122,10 +138,10 @@ def main(argv: list[str] | None = None) -> int:
         "flagged": flagged, "failed": [{"category": c, "url": u, "capture_status": s, "tier": t} for c, u, s, t in failed],
         "in_extension_skip_list": sum(registrable_domain(hostname(u)) in well_known for _, u, _ in evaluated),
     }
-    out = settings.processed_dir / "holdout_report.json"
+    out = settings.processed_dir / args.report
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(json.dumps({k: v for k, v in report.items() if k not in ("failed",)}, indent=2, ensure_ascii=False))
+    print(json.dumps({k: v for k, v in report.items() if k not in ("failed", "rows")}, indent=2, ensure_ascii=False))
     return 0
 
 

@@ -74,9 +74,9 @@ The result is a tier, not a raw probability, because people act on a clear instr
 
 | Tier | Assigned when (any) |
 |---|---|
-| **High risk** | Exact host reviewed fraudulent. Same registrable domain as a reviewed fraudulent site. Strong fraud behavior and classifier agrees. Approved/strong link to a reviewed case and a fraud behavior. Sign-in wall or thin page and same kit as a reviewed case. Sign-in wall or thin page, fraud behavior in delivered code and classifier agrees on the code. |
-| **Caution** | Fraud behavior without classifier agreement. Partial kit or infrastructure match. Fraud behavior in delivered code (thin page, or classifier agrees). Listing-identity mismatch. Classifier above the caution threshold. |
-| **Insufficient evidence** | Page failed, too thin, or a sign-in wall with no usable delivered code (< 40 words) and no match. Never reported as "safe". |
+| **High risk** | Invite-gated registration or a separate security/fund password, plus one of: first certificate under 30 days, task-scam route vocabulary in the site's own pages/code, brand-bait logos, a kit match (section 7). Exact host reviewed fraudulent. Same registrable domain as a reviewed fraudulent site. Strong fraud behavior and classifier agrees. Approved/strong link to a reviewed case and a fraud behavior. Sign-in wall or thin page and same kit as a reviewed case. Sign-in wall or thin page, fraud behavior in delivered code and classifier agrees on the code. |
+| **Caution** | Two or more registration, route or domain signals; a registration/login wall with a scam signal. Fraud behavior without classifier agreement. Partial kit or infrastructure match. Fraud behavior in delivered code (thin page, or classifier agrees). Listing-identity mismatch. Classifier above the caution threshold. |
+| **Insufficient evidence** | Page failed, too thin, a bot-challenge page instead of the site, a registration/login wall with nothing else, or a sign-in wall with no usable delivered code (< 40 words) and no match. Never reported as "safe". |
 | **No strong signals** | Otherwise, with the explicit note that this is not a guarantee. |
 
 Every tier comes with plain-language clues, up to three on the card. Each clue cites the sentence, file or reviewed
@@ -182,14 +182,56 @@ literals from the site's own JS (vendor chunks and common libraries skipped) and
 - The classifier also scores the code text (`code_score`) when it has ≥ 40 words.
 - Clue: "The site's own code (not the visible page) mentions deposits (51×), withdrawals (34×), bonuses (26×) and invitation codes (23×)."
 
-## 7. Automatic checking, idle snapshots and investigator mode
+## 7. Registration walls, referenced routes and bot challenges (unseen families)
+
+A real miss shaped this part. An unseen task-scam registration page was rated "No strong signals" because Hami's
+server never saw it: the site answered the capture browser with a Cloudflare bot challenge (403, "Just a
+moment…"), and the challenge page itself was analyzed. Hami does not try to get past bot checks. Instead it now:
+
+- **Recognizes challenge pages** (text and challenge-platform traffic). A challenge is never "No strong signals". It is Insufficient evidence at most on its own, and the challenge's own scripts and links never count as the site's code, kit files or identity.
+- **Uses the page the user's browser shows.** With "Check this page" and with consented automatic checks, the extension sends the page's structure, computed on the device from the HTML and inline scripts:
+  - same-site paths without queries;
+  - image file names;
+  - form-field descriptors without values;
+  - redacted title and visible text.
+
+  The server checks that this belongs to the same site, stores it as evidence (`browser_page_signals`), and never serves that result from the cache to anyone else.
+- **Reads referenced routes** from the HTML, JS and JSON the site already delivered (no navigation, no API calls), and from the page structure above. Route words are grouped: recharge/deposit, withdraw, task orders (`rot_order`, grab, `submit_order`…), bind-bank, invite, VIP, crypto (usdt, trc20, pay/bit), security password (`pwd2`, paypwd…) and wealth products. The levels:
+  - **task:** money-in routes plus task-order routes plus at least 3 groups;
+  - **money:** recharge plus at least 3 groups.
+
+  A telecom's "recharge" page or a micro-task platform's tasks/withdraw/invite routes alone never qualify.
+- **Fetches lazy chunks.** The capture also fetches same-origin `.js`/`.json` chunks referenced by already-loaded bundles: no HTML, no API/auth/pay paths, at most 30 files / 10 MB, 0.15 s apart. Those bodies feed route reading, delivered-code reading and kit fingerprints.
+- **Analyzes the registration wall:**
+  - invite-gated registration (code in the address, or a required or pre-filled invitation field);
+  - a separate security/fund/withdrawal password or PIN (Arabic and English);
+  - phone-only sign-up with a default country code;
+  - no company identity (no terms, privacy, address or contact);
+  - known scam registration routes (`/index/user/register/invite_code/`, `#/pages/register`);
+  - uni-app/H5 shells.
+
+  A wall is a page that is mostly a sign-up/login form (under 300 words), so a homepage with a login box is not a wall.
+- **Spots brand bait:** marketplace logos (alibaba, amazon, shein, noon…) as image names on a site that is not them.
+- **Checks the domain:** random-looking label, abused TLD (.xyz, .top, .shop, .vip, .cc…), and the age of the first certificate from certificate transparency (Cert Spotter, crt.sh fallback; cached; at least 2 s between queries). Under 30 days is strong, under 90 medium. The clue says "first certificate", not registration date.
+
+**Rules.**
+- **High:** invite gate or security password, plus one of: first certificate under 30 days, task route vocabulary, brand-bait logos, kit match.
+- **Caution:** two or more registration/route/domain signals, or a wall with a scam signal.
+- **Insufficient evidence:** a wall or challenge with nothing else.
+- A referral code on an established site with company identity cannot reach High on its own.
+
+**Linking evidence from the same pages:**
+- **Redirect / invitation gateway** (strong). The capture started on domain X and the scored page is on Y (HTTP redirect, meta-refresh or script redirect), and the landing page is a wall, shows scam signals or carries the same invite code. X is linked to Y. The shared invite code is named in the evidence, both domains become review candidates, and the discovery worker watches new certificates under both.
+- **Registration-page template** (medium, proposes a link on its own). Distinctive wording (UI boilerplate and the site's own brand removed) plus form structure, stored as feature hashes. Sharing it with another site is template reuse, not common ownership. Templates shared by more than 6 unrelated sites are generic and never link.
+
+## 8. Automatic checking, idle snapshots and investigator mode
 
 **On-device pre-filter** (`prefilter.ts`). No network is involved. Every page is classified as:
 - *skip*: sensitive categories (banks, government, health, mail…) and the Tranco top 10,000 + allowlist;
 - *high risk*: on the local list of confirmed hosts and domains, which shows the banner with no server call;
-- *candidate*: matches recent CT domains or kit file names in the page's resources.
+- *candidate*: every other site. Recent CT domains and kit file names among the page's resources are recorded as extra reasons.
 
-**Automatic checking.** Only after one-time bilingual consent, only candidates, and only the URL is sent. The
+**Automatic checking.** Only after one-time bilingual consent and only for candidates. The URL and the page structure (section 7) are sent. The
 device allows at most 30 checks per hour and checks each host at most once per 6 hours. The tab badge shows the
 tier (`!` / `?` / `✓`), and the full-page banner appears only for High.
 
@@ -211,7 +253,7 @@ shows its "being debugged" bar while it records. The flow:
 
 It never runs on sites the pre-filter skips.
 
-## 8. Discovery worker
+## 9. Discovery worker
 
 The worker polls public certificate-transparency sources for newly issued certificates:
 - crt.sh pattern queries;
@@ -224,7 +266,7 @@ repository). Matches are captured with the same safe pipeline, rate-limited: 20 
 captures, at most 5 captures per cycle, one cycle every 10 minutes. High-risk results go to the reviewer queue.
 Nothing is published or alerted without review.
 
-## 9. Linking, alerts and the case brief
+## 10. Linking, alerts and the case brief
 
 Pairs of sites become link candidates with one strong signal (same kit, shared distinctive infrastructure,
 registration destination in captured JSON, distinctive asset host) or two medium signals from different artifacts.
@@ -242,7 +284,7 @@ The case brief (Markdown/JSON) lists:
 
 Every link is labeled as a lead, not proof of common ownership.
 
-## 10. Privacy design and capture security
+## 11. Privacy design and capture security
 
 The full privacy design is in the README. In summary:
 - Decisions about what to check are made on the device.
@@ -263,7 +305,7 @@ Data handling:
 - The static check never stores or prints secret values.
 - A deployed version would be reviewed against the UAE Personal Data Protection Law (Federal Decree-Law No. 45 of 2021) and police evidence-handling rules.
 
-## 11. Limitations
+## 12. Limitations
 
 - Chrome extension + local server only. iOS/Android apps and a hosted service are roadmap. Reviewer decisions are not shared between installs, apart from the seed file.
 - An unknown kit behind a sign-in wall usually gets Caution, not High, until one site of the family is confirmed.
@@ -273,7 +315,7 @@ Data handling:
 - The S3-compatible artifact store is designed but not implemented.
 - The Tranco-based skip list is for non-commercial use.
 
-## 12. Roadmap
+## 13. Roadmap
 
 1. **Phones.** iOS and Android apps (one Expo codebase) with share-to-app from WhatsApp, Messages and browsers, deep links and the same bilingual card.
 2. **Hosted service.** A UAE North deployment (DEPLOY.md) with shared reviewer decisions, role-based access, retention controls and push alerts.
