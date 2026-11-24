@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hami حامي · Check a link before you pay</title>
+<meta name="description" content="Hami checks a website for scam signs before you pay. Arabic and English. ScamShield AI hackathon.">
+<link rel="icon" href="/web/static/icon.png">
+<style>
+:root{--green:#0b5d4b;--green2:#147a63;--mint:#e7f3ef;--ink:#1d2939;--muted:#5b677a;--line:#d6dee3;--bg:#f6f8f7;--card:#fff;--red:#b42318}
+@media (prefers-color-scheme:dark){:root{--ink:#e7ecef;--muted:#a3adba;--line:#2c3640;--bg:#0f1417;--card:#161d21;--mint:#14302a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI","Noto Sans Arabic",Tahoma,sans-serif}
+header{background:var(--green);color:#fff}
+.wrap{max-width:860px;margin:0 auto;padding:0 16px}
+.top{display:flex;align-items:center;gap:12px;padding:14px 0}
+.top img{width:34px;height:34px}
+.brand{font-weight:800;font-size:20px;flex:1}
+.lang{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+.hero{padding:18px 0 30px}
+.hero h1{font-size:30px;line-height:1.25;margin:0 0 8px}
+.hero p{margin:0;opacity:.92;max-width:680px}
+main{margin-top:-18px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:18px}
+label{display:block;font-weight:600;margin:0 0 6px}
+input[type=url],input[type=text]{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--bg);color:var(--ink)}
+.row{display:grid;grid-template-columns:1fr;gap:14px}
+.opt{color:var(--muted);font-weight:400}
+button.primary{margin-top:14px;width:100%;padding:13px;border:0;border-radius:10px;background:var(--green);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+button.primary:disabled{opacity:.6;cursor:wait}
+.status{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--mint)}
+.status.err{background:#fbeae8;color:var(--red)}
+.examples{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.examples button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.note{color:var(--muted);font-size:14px;margin:10px 0 0}
+#result:empty{display:none}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.how div{background:var(--bg);border-radius:10px;padding:12px}
+.how b{display:block;margin-bottom:4px}
+footer{color:var(--muted);font-size:14px;padding:10px 0 40px}
+footer a{color:var(--green2)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <img src="/web/static/icon.png" alt="">
+      <div class="brand">Hami حامي</div>
+      <button id="lang-btn" class="lang" type="button">العربية</button>
+    </div>
+    <div class="hero">
+      <h1 data-en="Check a link before you pay" data-ar="افحص الرابط قبل أن تدفع">Check a link before you pay</h1>
+      <p data-en="Hami opens the page in a safe browser, reads what it asks you to do with money, and tells you if it looks like a scam, with the evidence. Built for task and deposit scams targeting the UAE."
+         data-ar="يفتح حامي الصفحة في متصفح آمن، ويقرأ ما تطلبه منك بخصوص المال، ويخبرك إن كانت تبدو احتيالًا مع الأدلة. مصمم لعمليات احتيال المهام والإيداع التي تستهدف الإمارات.">Hami opens the page in a safe browser, reads what it asks you to do with money, and tells you if it looks like a scam, with the evidence. Built for task and deposit scams targeting the UAE.</p>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <section class="panel">
+    <form id="check-form" novalidate>
+      <div class="row">
+        <div>
+          <label for="url" data-en="Website link" data-ar="رابط الموقع">Website link</label>
+          <input id="url" type="url" inputmode="url" autocomplete="off" required dir="ltr"
+                 data-ph-en="https://example.com/register" data-ph-ar="https://example.com/register">
+        </div>
+        <div>
+          <label for="listing"><span data-en="Business name shown in a Google or Maps listing" data-ar="اسم النشاط كما يظهر في Google أو الخرائط">Business name shown in a Google or Maps listing</span>
+            <span class="opt" data-en="(optional)" data-ar="(اختياري)">(optional)</span></label>
+          <input id="listing" type="text" autocomplete="off" maxlength="200"
+                 data-ph-en="e.g. Al Noor Manpower Services" data-ph-ar="مثال: النور لخدمات القوى العاملة">
+        </div>
+      </div>
+      <button id="check-btn" class="primary" type="submit" data-en="Check this link" data-ar="افحص هذا الرابط">Check this link</button>
+      <div id="status" class="status" hidden></div>
+    </form>
+    <p class="note" data-en="Try an example:" data-ar="جرّب مثالًا:">Try an example:</p>
+    <div class="examples">
+      <button type="button" data-example="https://betnala.com/" data-en="betnala[.]com (sign-in wall, unreviewed)" data-ar="betnala[.]com (صفحة دخول، غير مُراجع)">betnala[.]com (sign-in wall, unreviewed)</button>
+      <button type="button" data-example="https://cs.aed99.com/" data-en="cs.aed99[.]com (part of a confirmed scam)" data-ar="cs.aed99[.]com (جزء من احتيال مؤكد)">cs.aed99[.]com (part of a confirmed scam)</button>
+      <button type="button" data-example="https://www.bayt.com/" data-en="bayt.com (legitimate job board)" data-ar="bayt.com (موقع وظائف مشروع)">bayt.com (legitimate job board)</button>
+    </div>
+    <p class="note" data-en="A check takes 10 to 20 seconds. Only the link and the business name you type are sent to this server. Hami's browser never signs in, submits forms or pays."
+       data-ar="يستغرق الفحص من 10 إلى 20 ثانية. يُرسل إلى هذا الخادم فقط الرابط واسم النشاط اللذان تكتبهما. متصفح حامي لا يسجل الدخول ولا يرسل النماذج ولا يدفع.">A check takes 10 to 20 seconds. Only the link and the business name you type are sent to this server. Hami's browser never signs in, submits forms or pays.</p>
+  </section>
+  <section id="result"></section>
+  <section class="panel">
+    <div class="how">
+      <div><b data-en="Reads the page" data-ar="يقرأ الصفحة">Reads the page</b><span data-en="Deposit-to-unlock, advance fees, gambling deposits, card requests, in Arabic and English." data-ar="إيداع لفتح المهام، رسوم مسبقة، إيداعات المراهنة، طلب بيانات البطاقة، بالعربية والإنجليزية.">Deposit-to-unlock, advance fees, gambling deposits, card requests, in Arabic and English.</span></div>
+      <div><b data-en="Sees through sign-in walls" data-ar="يرى ما وراء صفحات الدخول">Sees through sign-in walls</b><span data-en="Matches the software a site delivers against confirmed scams, and reads its own code and routes." data-ar="يطابق البرمجيات التي يقدمها الموقع مع احتيالات مؤكدة، ويقرأ شيفرته ومساراته.">Matches the software a site delivers against confirmed scams, and reads its own code and routes.</span></div>
+      <div><b data-en="Explains every result" data-ar="يشرح كل نتيجة">Explains every result</b><span data-en="Up to three clues, each citing the sentence, file or confirmed case behind it." data-ar="حتى ثلاثة أدلة، كل منها يذكر الجملة أو الملف أو الحالة المؤكدة التي يستند إليها.">Up to three clues, each citing the sentence, file or confirmed case behind it.</span></div>
+    </div>
+  </section>
+</main>
+<footer class="wrap">
+  <span data-en="Hami is a working prototype for the ScamShield AI hackathon (AD Police × 42 Abu Dhabi). A result is guidance, not a legal finding. Report scams through official police channels (Abu Dhabi Police Aman 8002626, eCrime)."
+        data-ar="حامي نموذج أولي عامل لهاكاثون ScamShield AI (شرطة أبوظبي × 42 أبوظبي). النتيجة إرشاد وليست حكمًا قانونيًا. أبلغ عن الاحتيال عبر القنوات الرسمية للشرطة (أمان شرطة أبوظبي 8002626، منصة eCrime).">Hami is a working prototype for the ScamShield AI hackathon (AD Police × 42 Abu Dhabi). A result is guidance, not a legal finding. Report scams through official police channels (Abu Dhabi Police Aman 8002626, eCrime).</span>
+  · <a href="https://github.com/mboausibah/hami">GitHub</a>
+  · <a href="https://github.com/mboausibah/hami/releases/latest/download/hami-extension.zip" data-en="Chrome extension" data-ar="إضافة كروم">Chrome extension</a>
+</footer>
+<script src="/web/static/check.js"></script>
+</body>
+</html>

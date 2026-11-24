@@ -105,3 +105,56 @@ def cert_age_days(host: str) -> int | None:
             conn.execute("INSERT INTO domain_age (domain, first_cert_at, source, error, checked_at) VALUES (?,?,?,?,?)",
                          (domain, first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None, source or None, error, utcnow()))
     return max(0, (now - first).days) if first else None
+
+
+# ---- non-blocking lookup for the scan path -----------------------------------------------------------------------
+_inflight: dict[str, threading.Thread] = {}
+_inflight_lock = threading.Lock()
+
+
+def _cached(domain: str) -> tuple[bool, int | None]:
+    """(fresh cache entry exists, age in days or None)."""
+    now = datetime.now(timezone.utc)
+    with db() as conn:
+        row = conn.execute("SELECT * FROM domain_age WHERE domain=?", (domain,)).fetchone()
+    if row is None:
+        return False, None
+    checked, first = _parse(row["checked_at"]), _parse(row["first_cert_at"])
+    if not checked or now - checked >= (POSITIVE_TTL if first else NEGATIVE_TTL):
+        return False, None
+    return True, (max(0, (now - first).days) if first else None)
+
+
+def cert_age_lookup(host: str, wait_s: float | None = None) -> tuple[int | None, str]:
+    """(age in days or None, status). status: known | unknown (no certificate found or lookup failed) | pending (the
+    lookup is still running in the background; treated as NOT YET KNOWN, never as clean) | disabled | not_applicable.
+    Page and URL signals never wait for this: the scan waits at most DOMAIN_AGE_WAIT_S (default 0)."""
+    if not settings.domain_age_enabled:
+        return None, "disabled"
+    domain = registrable_domain(host)
+    if _skip(domain):
+        return None, "not_applicable"
+    fresh, age = _cached(domain)
+    if fresh:
+        return age, ("known" if age is not None else "unknown")
+    with _inflight_lock:
+        t = _inflight.get(domain)
+        if t is None or not t.is_alive():
+            t = threading.Thread(target=_background_lookup, args=(domain,), daemon=True, name=f"domain-age-{domain}")
+            _inflight[domain] = t
+            t.start()
+    t.join(settings.domain_age_wait_s if wait_s is None else wait_s)
+    fresh, age = _cached(domain)
+    if fresh:
+        return age, ("known" if age is not None else "unknown")
+    return None, "pending"
+
+
+def _background_lookup(domain: str) -> None:
+    try:
+        cert_age_days(domain)
+    except Exception:  # noqa: BLE001 - never crash a worker thread; the next scan retries
+        pass
+    finally:
+        with _inflight_lock:
+            _inflight.pop(domain, None)

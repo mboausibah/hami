@@ -985,8 +985,8 @@ async function Oe(e, t) {
 				ok: !1,
 				error: "not checkable"
 			};
-			let a = `result:${e.url}`, o = (await chrome.storage.session.get(a))[a];
-			if (o && Date.now() - o.at < B) return await $(r, o.result.tier), {
+			let a = `result:${e.url}`, o = (await chrome.storage.session.get(a))[a], s = o?.result.pending?.length ? 6e4 : B;
+			if (o && Date.now() - o.at < s) return await $(r, o.result.tier), {
 				ok: !0,
 				data: o.result
 			};
@@ -994,19 +994,19 @@ async function Oe(e, t) {
 				ok: !1,
 				error: "rate limited on this device"
 			};
-			let s = await (await G()).scan(e.url, {
+			let c = await (await G()).scan(e.url, {
 				sourceType: "extension",
 				lang: n.lang,
 				pageSignals: e.pageSignals ?? null
 			});
-			return await Q(s, e.url), await chrome.storage.session.set({ [`tab:${r}`]: {
-				scanId: s.scan_id,
-				key: s.access_key,
+			return await Q(c, e.url), await chrome.storage.session.set({ [`tab:${r}`]: {
+				scanId: c.scan_id,
+				key: c.access_key,
 				url: e.url,
 				reasons: e.reasons
-			} }), await $(r, s.tier), {
+			} }), await $(r, c.tier), {
 				ok: !0,
-				data: s
+				data: c
 			};
 		}
 		case "snapshot": {

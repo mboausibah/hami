@@ -190,3 +190,45 @@ def test_gateway_and_template_links(sites):
     assert wrong is None, "the gateway itself does not inherit the landing page's template"
     assert h["tier"] in ("high_risk", "caution")
     assert "redirect / invitation gateway" in md or "same page template" in md
+
+
+def test_invite_gate_plus_security_password_field_alone_is_high():
+    html = ("<html><head><title>Register</title></head><body><form>"
+            "<input type='text' name='username' placeholder='Mobile number'>"
+            "<input type='password' name='pwd' placeholder='Login password'>"
+            "<input type='password' name='paypassword' placeholder='Security password'>"
+            "<input name='invite_code' value='AB12CD' readonly></form>"
+            "<a href='/terms'>Terms</a> <a href='/privacy'>Privacy</a></body></html>")
+    d, _ = _decide("https://www.example-shop.com/signup", html, age=3000)  # established domain, has identity links
+    assert d.tier == "high_risk" and any(r.startswith("invite_gate+security_password_field") for r in d.rules_fired)
+    # The security password only mentioned in text (not a field) is not the signature pair.
+    html2 = html.replace("<input type='password' name='paypassword' placeholder='Security password'>", "") + \
+        "<p>Set your security password after sign-up.</p>"
+    d2, _ = _decide("https://www.example-shop.com/signup", html2, age=3000)
+    assert d2.tier != "high_risk", d2.rules_fired
+
+
+def test_pending_certificate_lookup_never_blocks_or_counts_as_clean(fresh_db, monkeypatch):
+    import threading
+    from datetime import datetime, timezone
+
+    from app import domain_age
+    from app.config import settings
+
+    release = threading.Event()
+
+    def slow(domain):
+        release.wait(5)
+        return datetime(2026, 11, 20, tzinfo=timezone.utc), "test", None
+
+    monkeypatch.setattr(settings, "domain_age_enabled", True)
+    monkeypatch.setattr(settings, "domain_age_wait_s", 0.0)
+    monkeypatch.setattr(domain_age, "first_certificate", slow)
+    age, status = domain_age.cert_age_lookup("app.k7x2qz9m.xyz")
+    assert (age, status) == (None, "pending")
+    release.set()
+    for _ in range(50):
+        age, status = domain_age.cert_age_lookup("app.k7x2qz9m.xyz", wait_s=0.1)
+        if status == "known":
+            break
+    assert status == "known" and age is not None and age < 30

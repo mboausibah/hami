@@ -246,3 +246,9 @@ RELATION_TEXT.update({
     "page_template": {"en": "same page template (template reuse, not common ownership)",
                       "ar": "نفس قالب صفحة التسجيل (إعادة استخدام قالب، وليس دليلًا على ملكية مشتركة)"},
 })
+
+NOT_CHECKED.update({
+    "domain_age_pending": {"en": "The domain's certificate history is still being looked up; its age is not yet known "
+                                 "(not counted as safe). Check again in a minute.",
+                           "ar": "ما زال البحث جاريًا في سجل شهادات النطاق؛ عمره غير معروف بعد (ولا يُعدّ آمنًا). أعد الفحص بعد دقيقة."},
+})

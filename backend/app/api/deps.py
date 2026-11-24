@@ -86,8 +86,14 @@ def rate_limit(bucket: str):  # noqa: ANN201
             ok, retry = limiter.check(bucket + ":dev", device, limit)
             if not ok:
                 raise HTTPException(429, "rate limit exceeded for this device", headers={"Retry-After": str(int(retry) + 1)})
-        ok, retry = limiter.check(bucket + ":ip", ip, limit * max(1, settings.rate_ip_multiplier))
+        ip_limit = settings.rate_scans_per_ip_per_min if bucket == "scans" else limit * max(1, settings.rate_ip_multiplier)
+        ok, retry = limiter.check(bucket + ":ip", ip, ip_limit)
         if not ok:
             raise HTTPException(429, "rate limit exceeded", headers={"Retry-After": str(int(retry) + 1)})
+        if bucket == "scans":
+            ok, retry = limiter.check("scans:global", "all", settings.rate_scans_global_per_min)
+            if not ok:
+                raise HTTPException(429, "the server is busy; try again in a minute",
+                                    headers={"Retry-After": str(int(retry) + 1)})
 
     return dep

@@ -57,6 +57,19 @@ for (const b of bundles) {
   });
 }
 
+// 2b. Public check page served by the API at "/" (not part of the extension zip).
+await build({
+  ...common,
+  root,
+  build: {
+    outDir: resolve(root, "../../backend/app/web/static"),
+    emptyOutDir: false,
+    target: "es2020",
+    minify: true,
+    lib: { entry: resolve(src, "web/checkpage.ts"), formats: ["iife"], name: "hami_check", fileName: () => "check.js" },
+  },
+});
+
 // 3. Manifest + icons.
 copyFileSync(resolve(src, "manifest.json"), resolve(dist, "manifest.json"));
 mkdirSync(resolve(dist, "icons"), { recursive: true });

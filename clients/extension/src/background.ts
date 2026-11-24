@@ -149,7 +149,10 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
       if (!host) return { ok: false, error: "not checkable" };
       const key = `result:${req.url}`;
       const cached = (await chrome.storage.session.get(key))[key] as { at: number; result: ScanResult } | undefined;
-      if (cached && Date.now() - cached.at < AUTO_HOST_TTL_MS) {
+      // A result whose evidence was still pending (certificate age) is only reused for a minute, so the automatic
+      // check and "Check this page" converge on the same tier.
+      const ttl = cached?.result.pending?.length ? 60_000 : AUTO_HOST_TTL_MS;
+      if (cached && Date.now() - cached.at < ttl) {
         await showTabBadge(tabId, cached.result.tier);
         return { ok: true, data: cached.result };
       }

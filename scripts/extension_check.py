@@ -240,6 +240,44 @@ def main() -> int:
             check("unknown site gets a neutral shield", tiers[2] == "", str(tiers))
             page.screenshot(path=str(shots / "search_shields.png"))
 
+            # Automatic check and "Check this page" agree on the same URL (no stale-cache difference).
+            reg_url = site("site-e") + "index/user/register/invite_code/QV7K2M.html"
+            auto_tab = ctx.new_page()
+            auto_tab.goto(reg_url)
+            auto_tier = None
+            for _ in range(120):
+                got = sw.evaluate("k => chrome.storage.session.get(k).then(x => x[k] ? x[k].result.tier : null)", f"result:{reg_url}")
+                if got:
+                    auto_tier = got
+                    break
+                time.sleep(0.5)
+            pop2 = ctx.new_page()
+            pop2.goto(f"{base}/popup/popup.html?target={reg_url}")
+            pop2.click("#check-btn")
+            pop2.wait_for_selector(".hami-card", timeout=90000)
+            manual_tier = sw.evaluate("k => chrome.storage.session.get(k).then(x => x[k] ? x[k].result.tier : null)", f"result:{reg_url}")
+            check("automatic check and 'Check this page' give the same tier", auto_tier is not None and auto_tier == manual_tier,
+                  f"auto={auto_tier} manual={manual_tier}")
+            pop2.close()
+            auto_tab.close()
+
+            # Public check page at "/" (no extension, no login): same result card.
+            web = ctx.new_page()
+            web.goto(f"{api}/")
+            web.fill("#url", site("site-d"))
+            web.click("#check-btn")
+            web.wait_for_selector("#result .hami-card", timeout=90000)
+            wtext = web.inner_text("#result")
+            check("public check page: Site D is High risk with the kit-match clue",
+                  "High risk" in wtext and "same software" in wtext, " ".join(wtext[:80].split()))
+            check("public check page shows clue screenshots", web.locator("#result .hami-clue img").count() >= 1)
+            web.click("#lang-btn")
+            web.wait_for_timeout(300)
+            check("public check page switches to Arabic (RTL)", web.evaluate("document.documentElement.dir") == "rtl"
+                  and "خطر مرتفع" in web.inner_text("#result"))
+            web.screenshot(path=str(shots / "public_check_page.png"), full_page=True)
+            web.close()
+
             # Unseen scam behind a bot challenge: the server's capture only gets the challenge page (site-f), while the
             # user's browser gets the real registration page (served here to the extension's browser only). The
             # popup sends the page STRUCTURE computed on the device; field values never leave it.
@@ -315,9 +353,14 @@ def main() -> int:
             saved = inv.evaluate("window.__ev")
             check("evidence saved automatically after 10 s idle", bool(saved and saved.get("sha256")), str(saved)[:120])
             if saved and saved.get("sha256"):
-                path = sw.evaluate("async () => { const d = await chrome.downloads.search({orderBy: ['-startTime'], limit: 1,"
-                                   " state: 'complete'}); return d.length ? d[0].filename : null; }")
-                text = Path(path).read_text(encoding="utf-8") if path and Path(path).is_file() else ""
+                path, text = None, ""
+                for _ in range(30):  # the download may still be finishing when the page reports the save
+                    path = sw.evaluate("async () => { const d = await chrome.downloads.search({orderBy: ['-startTime'], limit: 1,"
+                                       " state: 'complete'}); return d.length ? d[0].filename : null; }")
+                    text = Path(path).read_text(encoding="utf-8") if path and Path(path).is_file() else ""
+                    if text:
+                        break
+                    time.sleep(0.5)
                 check("downloaded .har is sanitized (no cookie, no token)", text != "" and "COOKIESECRET" not in text
                       and "TOKENSECRET" not in text and '"name": "Cookie"' not in text and "countries.json" in text,
                       f"{len(text)} bytes")

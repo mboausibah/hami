@@ -28,6 +28,8 @@ export interface Artifact {
 }
 
 export interface ScanResult {
+  /** Evidence still being gathered (e.g. "domain_age"): such a result is not reused for long. */
+  pending?: string[];
   scan_id: number;
   access_key: string;
   url: string;

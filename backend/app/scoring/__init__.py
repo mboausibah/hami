@@ -33,6 +33,8 @@ from typing import Any
 from app.analyze import Analysis
 from app.scoring import texts as T
 
+# Bump when tier rules change: cached results scored with older rules are re-scored from their stored capture.
+RULES_VERSION = "2026-11-24.2"
 FRAUD_BEHAVIORS = ("deposit_to_unlock", "advance_fee", "commission_transfer", "gambling_deposit",
                    "investment_promise", "credential_request")
 CLUE_PRIORITY = ("identity_mismatch", "reviewed_case_exact_host", "reviewed_domain", "kit_match", "route_vocabulary",
@@ -130,6 +132,12 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
     if gate and gate_support and not reviewed_legit:
         tier = "high_risk"
         fired.append("registration_gate+" + "+".join(gate_support))
+    # Task-scam signature on its own: an invitation/referral gate AND a separate security/fund/withdrawal/transaction
+    # password FIELD on the same registration page. Phone-only sign-up and missing company identity strengthen it.
+    if ws["invite_gated"] and w.get("security_password") == "field" and not reviewed_legit:
+        tier = "high_risk"
+        extra = [k for k in ("phone_only", "no_company_identity") if ws[k]]
+        fired.append("invite_gate+security_password_field" + "".join("+" + k for k in extra))
     if thin_page and not reviewed_legit:
         if ctx.kit_strong:
             tier = "high_risk"

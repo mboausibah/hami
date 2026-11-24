@@ -72,7 +72,8 @@ def start_local() -> tuple[subprocess.Popen, str, str, int, Path]:
     env = dict(os.environ, HAMI_DATA_DIR=str(tmp / "storage"), HAMI_MODELS_DIR=str(models),
                HAMI_PROCESSED_DIR=str(processed), HAMI_REVIEWER_TOKEN=token, RUN_TESTSITES="true",
                TESTSITE_PORT=str(ts_port), RATE_SCANS_PER_MIN="1000", RATE_DEFAULT_PER_MIN="1000",
-               RATE_LOOKUP_PER_MIN="1000", PYTHONUTF8="1", DOMAIN_AGE_ENABLED="false", HAMI_PUBLIC_BASE_URL=f"http://127.0.0.1:{api_port}")
+               RATE_LOOKUP_PER_MIN="1000", RATE_SCANS_PER_IP_PER_MIN="1000",
+               RATE_SCANS_GLOBAL_PER_MIN="1000", PYTHONUTF8="1", DOMAIN_AGE_ENABLED="false", HAMI_PUBLIC_BASE_URL=f"http://127.0.0.1:{api_port}")
     env.pop("HAMI_DB_PATH", None)
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port",
                              str(api_port), "--log-level", "warning"], cwd=BACKEND, env=env)

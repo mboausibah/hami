@@ -120,3 +120,10 @@ def test_local_lists_feed(client):
     d = client.get("/indicators/local-lists").json()
     assert set(d) >= {"version", "hosts", "domains", "recent_cert_domains", "kit_files"}
     assert all(isinstance(d[k], list) for k in ("hosts", "domains", "recent_cert_domains", "kit_files"))
+
+
+def test_public_check_page_and_assets(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "Check a link before you pay" in r.text and "افحص الرابط قبل أن تدفع" in r.text
+    assert client.get("/web/static/check.js").status_code == 200
+    assert client.get("/review", follow_redirects=False).status_code in (302, 303, 307)  # console still needs the token

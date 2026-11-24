@@ -1,9 +1,12 @@
 """FastAPI application: public API, reviewer API and the reviewer console."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import reviewer, router
 from app.config import settings
@@ -31,9 +34,15 @@ def create_app() -> FastAPI:
 
     app.include_router(ui)
 
+    # Public check page (no login): paste a link, get the same result card as the extension. The reviewer console
+    # stays at /review behind its token.
+    web_dir = Path(__file__).parent / "web"
+    app.mount("/web/static", StaticFiles(directory=str(web_dir / "static")), name="web-static")
+
     @app.get("/", include_in_schema=False)
-    def root() -> RedirectResponse:
-        return RedirectResponse("/review")
+    def root() -> FileResponse:
+        return FileResponse(web_dir / "index.html", media_type="text/html; charset=utf-8",
+                            headers={"Cache-Control": "no-cache"})
 
     if settings.run_testsites:
         from app.testsites import start_in_thread

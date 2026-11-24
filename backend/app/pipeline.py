@@ -18,7 +18,7 @@ from app.capture import CaptureResult, capture
 from app.config import settings
 from app.db import db, tx, utcnow
 from app.sanitize import redact_text, sanitize_har, sanitize_html, sanitize_url
-from app.scoring import ReviewedContext, clue_text, decide
+from app.scoring import RULES_VERSION, ReviewedContext, clue_text, decide
 from app.scoring import texts as T
 from app.scoring.model_store import current_model
 from app.storage import artifact_url, put_artifact, read_artifact
@@ -66,6 +66,10 @@ def submit_scan(url: str, source_type: str = "manual", listing_name: str | None 
                                     page_signals=signals)
     if not force and signals is None:
         cached = _recent_scan(norm)
+        if cached is not None and _needs_rescore(cached["scan_id"]):
+            # Scored with older rules, or the domain age was still pending: re-score the stored capture (no new visit),
+            # so the first and later checks of a URL agree.
+            return reanalyze_stored(cached["scan_id"], listing_name=listing_name, source_type=source_type, lang=lang)
         if cached is not None:
             if (cached["listing_name"] or None) == listing_name:
                 payload = get_scan_payload(cached["scan_id"])
@@ -260,6 +264,8 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
                 "screenshot_artifact_id": shot_id,
             })
         not_checked = list(decision.not_checked)
+        if (an.wall or {}).get("cert_age_status") == "pending":
+            not_checked.append("domain_age_pending")
         with tx(conn):
             conn.execute(
                 "INSERT INTO assessments (scan_id, risk_tier, score, rules_fired, clues_json, identity_check, top_phrases,"
@@ -271,7 +277,8 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
                              "code_mentions": an.code_mentions, "code_behaviors": an.code_behaviors,
                              "wall": {k: v for k, v in (an.wall or {}).items()
                                       if k not in ("paths", "images", "template_features")},
-                             "redirect": an.redirect},
+                             "redirect": an.redirect, "rules_version": RULES_VERSION,
+                             "domain_age_status": (an.wall or {}).get("cert_age_status")},
                             ensure_ascii=False),
                  an.identity.get("result", "not_checked"), json.dumps(phrases, ensure_ascii=False), version, utcnow(),
                  code_score))
@@ -336,14 +343,16 @@ def _recent_scan(norm: str) -> sqlite3.Row | None:
     with db() as conn:
         return conn.execute(
             "SELECT * FROM scans WHERE normalized_url=? AND status='done' AND capture_status='ok' "
-            "AND COALESCE(client_signals, 0)=0 AND submitted_at >= ? ORDER BY scan_id DESC LIMIT 1", (norm, cutoff)).fetchone()
+            "AND COALESCE(client_signals, 0)=0 AND COALESCE(batch, '') NOT IN ('snapshot', 'evidence', 'seed') "
+            "AND submitted_at >= ? ORDER BY scan_id DESC LIMIT 1", (norm, cutoff)).fetchone()
 
 
 def _last_good_scan(norm: str, exclude: int) -> sqlite3.Row | None:
     with db() as conn:
         return conn.execute(
             "SELECT * FROM scans WHERE normalized_url=? AND status='done' AND capture_status='ok' AND scan_id<>? "
-            "AND COALESCE(client_signals, 0)=0 ORDER BY scan_id DESC LIMIT 1", (norm, exclude)).fetchone()
+            "AND COALESCE(client_signals, 0)=0 AND COALESCE(batch, '') NOT IN ('snapshot', 'evidence', 'seed') "
+            "ORDER BY scan_id DESC LIMIT 1", (norm, exclude)).fetchone()
 
 
 # ------------------------------------------------------------------------------------------------
@@ -404,7 +413,10 @@ def get_scan_payload(scan_id: int, include_internal: bool = False) -> dict[str, 
             or next((l for l in extra.get("partial_links", []) if l.get("relation") == "same_kit"), None),
             "domain_inherited": extra.get("domain_inherited"),
             "code_mentions": extra.get("code_mentions") or {},
+            "domain_age_status": extra.get("domain_age_status"),
         },
+        # Evidence still being gathered (e.g. the certificate-age lookup): clients must not reuse this result for long.
+        "pending": ["domain_age"] if extra.get("domain_age_status") == "pending" else [],
     })
     if include_internal:
         payload["strong_links"] = extra.get("strong_links", [])
@@ -457,15 +469,16 @@ def _stored_page_signals(conn: Any, scan_id: int) -> dict[str, Any] | None:
 def _add_domain_age(an: Analysis, host: str) -> None:
     """First certificate of the registrable domain (certificate transparency), as evidence for the tier rules."""
     from app.analyze import Indicator
-    from app.domain_age import cert_age_days
+    from app.domain_age import cert_age_lookup
 
     try:
-        age = cert_age_days(an.page_host or host)
+        age, status = cert_age_lookup(an.page_host or host)
     except Exception:  # noqa: BLE001 - a lookup failure must never break a scan
-        age = None
+        age, status = None, "unknown"
     if an.wall is None:
         an.wall = {}
     an.wall["cert_age_days"] = age
+    an.wall["cert_age_status"] = status
     if age is not None and age < 90:
         an.indicators.append(Indicator(type="young_domain", strength="strong" if age < 30 else "medium",
                                        host_ref=registrable_domain(an.page_host or host), source="domain",
@@ -491,3 +504,16 @@ def _store_linking_evidence(conn: Any, scan_id: int, an: Analysis, host: str) ->
                  json.dumps({"scan_id": scan_id, "role": role, "mechanism": g["mechanism"], "invite_code": g["invite_code"],
                              "gateway": g["gateway_host"], "target": g["target_host"]}),
                  scan_id, "scanned", f"{role} of a redirect/invitation gateway; review candidate", utcnow()))
+
+
+def _needs_rescore(scan_id: int) -> bool:
+    with db() as conn:
+        a = conn.execute("SELECT clues_json FROM assessments WHERE scan_id=? ORDER BY assessment_id DESC LIMIT 1",
+                         (scan_id,)).fetchone()
+    if a is None:
+        return True
+    try:
+        c = json.loads(a["clues_json"] or "{}")
+    except ValueError:
+        return True
+    return c.get("rules_version") != RULES_VERSION or c.get("domain_age_status") == "pending"

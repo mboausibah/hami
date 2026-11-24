@@ -133,7 +133,9 @@ async function runCheck(force: boolean): Promise<void> {
 async function tabSignals(url: string): Promise<PageSignals | null> {
   try {
     const tabs = await chrome.tabs.query({});
-    const tab = tabs.find((x) => x.url === url) ?? tabs.find((x) => x.active && x.url === url);
+    const bare = (u?: string): string => (u ?? "").split("#")[0];
+    // Same page as the automatic check: the active tab first, then any tab showing this URL (fragment ignored).
+    const tab = tabs.find((x) => x.active && bare(x.url) === bare(url)) ?? tabs.find((x) => bare(x.url) === bare(url));
     if (tab?.id === undefined) return null;
     return await Promise.race([
       chrome.tabs.sendMessage(tab.id, { type: "collectPageSignals" }) as Promise<PageSignals | null>,

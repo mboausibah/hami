@@ -77,9 +77,14 @@ class Settings:
     seed_path: Path = field(default_factory=lambda: Path(_env("HAMI_SEED_PATH", str(REPO_DIR / "data" / "seed" / "indicators.json"))))
     load_seed: bool = field(default_factory=lambda: _env_bool("HAMI_LOAD_SEED", True))
     # Domain age from certificate transparency at scan time (cached, rate-limited; off in tests).
+    # Public scans: per client IP and for the whole server (protects the capture browser on a public URL).
+    rate_scans_per_ip_per_min: int = field(default_factory=lambda: _env_int("RATE_SCANS_PER_IP_PER_MIN", 8))
+    rate_scans_global_per_min: int = field(default_factory=lambda: _env_int("RATE_SCANS_GLOBAL_PER_MIN", 40))
     domain_age_enabled: bool = field(default_factory=lambda: _env_bool("DOMAIN_AGE_ENABLED", True))
     domain_age_timeout_s: float = field(default_factory=lambda: _env_float("DOMAIN_AGE_TIMEOUT_S", 6.0))
     domain_age_min_gap_s: float = field(default_factory=lambda: _env_float("DOMAIN_AGE_MIN_GAP_S", 2.0))
+    # How long a scan waits for the lookup (0 = never wait: page/URL signals decide now, the age joins later).
+    domain_age_wait_s: float = field(default_factory=lambda: _env_float("DOMAIN_AGE_WAIT_S", 0.0))
     # Extra same-origin JS/JSON chunks referenced by already-loaded bundles (no HTML, no API, no form submits).
     chunk_fetch_max_files: int = field(default_factory=lambda: _env_int("CHUNK_FETCH_MAX_FILES", 30))
     chunk_fetch_max_bytes: int = field(default_factory=lambda: _env_int("CHUNK_FETCH_MAX_BYTES", 10_000_000))
