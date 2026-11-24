@@ -84,6 +84,7 @@ class Analysis:
     code_signals: list[str] = field(default_factory=list)
     code_mentions: dict[str, int] = field(default_factory=dict)
     code_features: dict[str, float] = field(default_factory=dict)
+    wall: dict[str, Any] = field(default_factory=dict)     # registration wall, routes, brand bait, domain shape
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -102,6 +103,7 @@ class AnalyzerInput:
     capture_status: str = "ok"
     http_status: int | None = None
     listing_name: str | None = None
+    client: dict | None = None        # page as rendered in the user's browser (extension; structure only)
 
 
 def _excerpt(line: str, limit: int = 200) -> str:
@@ -230,11 +232,44 @@ def analyze(inp: AnalyzerInput) -> Analysis:
         if not fp:
             fp = fingerprint(soup)
 
+    # Bot-challenge / block page (e.g. "Just a moment..." interstitials): the server never saw the site itself.
+    server_text = normalize_arabic("\n".join(l for _, l in lines_by_step))
+    server_words = len(re.findall(r"\w+", server_text))
+    challenge_traffic = any("/cdn-cgi/challenge-platform/" in (e.get("request", {}).get("url", "") or "")
+                            for e in ((inp.har or {}).get("log", {}).get("entries", []) or [])[:60])
+    bot_challenge = (bool(P.BLOCK_PAGE.search(server_text)) and server_words < 150) or (
+        challenge_traffic and server_words < 150)
+    client = inp.client if isinstance(inp.client, dict) else None
+    if client:
+        # The page the user's own browser rendered. When the server only saw a challenge or a near-empty page, its
+        # text replaces the server text; otherwise new lines are added. Structure only arrives redacted.
+        client_lines = [l.strip()[:400] for l in str(client.get("text") or "").splitlines() if l.strip()][:400]
+        if bot_challenge or server_words < 40:
+            lines_by_step, seen_lines = [], set()
+        for line in client_lines:
+            if line not in seen_lines:
+                seen_lines.add(line)
+                lines_by_step.append((0, line))
+        if client.get("fields"):
+            from html import escape
+
+            snippet = "".join(
+                f'<input type="{escape(str(f.get("type") or "text")[:20])}" name="{escape(str(f.get("name") or "")[:80])}" '
+                f'placeholder="{escape(str(f.get("placeholder") or "")[:80])}" aria-label="{escape(str(f.get("label") or "")[:80])}">'
+                for f in client.get("fields", [])[:60] if isinstance(f, dict))
+            fi = form_fields(soup_of(f"<form>{snippet}</form>"))
+            known = {(f.kind, f.input_type, f.hint) for f in forms.fields}
+            forms.fields.extend(f for f in fi.fields if (f.kind, f.input_type, f.hint) not in known)
+        if client.get("title") and not names:
+            names.append(str(client["title"])[:120])
+
     all_text = "\n".join(l for _, l in lines_by_step)
     title_text = ""
     if soups:
         t = soups[0][1].title
         title_text = t.string.strip() if t and t.string else ""
+    if client and (bot_challenge or not title_text):
+        title_text = str(client.get("title") or "")[:200]
     an.lang = detect_lang(all_text) or detect_lang(title_text, min_letters=4)
     ar_lines = [l for _, l in lines_by_step if detect_lang(l, 3) == "ar"]
     en_lines = [l for _, l in lines_by_step if detect_lang(l, 3) in ("en", "mixed")]
@@ -364,7 +399,14 @@ def analyze(inp: AnalyzerInput) -> Analysis:
         "cloaking_suspected": block or (inp.http_status in (401, 403, 429, 451, 503) and an.word_count < 150),
         "company_details": bool(company),
         "job_context": job_context,
+        "bot_challenge": bot_challenge and not client,
+        "user_browser": bool(client),
     }
+    if client and an.word_count >= 25:
+        # The user's browser saw the real page: a server-side block is no longer the whole story.
+        an.flags["cloaking_suspected"] = False
+        an.flags["thin_content"] = False
+    _wall_indicators(an, inp, soups, lines_by_step, bool(company), client, bot_challenge)
 
     types = {i.type for i in an.indicators}
     an.behaviors = [b for b in STRONG_BEHAVIORS + OTHER_BEHAVIORS
@@ -471,3 +513,63 @@ def build_features(an: Analysis, types: set[str], kinds: set[str]) -> dict[str, 
     f["company_details"] = 1.0 if an.flags.get("company_details") else 0.0
     f["log_words"] = math.log1p(an.word_count) / 10
     return f
+
+
+def _wall_indicators(an: Analysis, inp: AnalyzerInput, soups: list, lines_by_step: list, company: bool,
+                     client: dict | None, bot_challenge: bool) -> None:
+    """Registration wall, referenced routes, brand-bait images and domain shape (see app/analyze/walls.py)."""
+    from app.analyze.walls import ROUTE_LABEL, analyze_wall
+
+    htmls = [h for _s, _a, h in inp.steps if h]
+    w = analyze_wall(an.page_url or inp.page_url, [s for _st, s in soups], htmls, inp.har,
+                     [l for _s, l in lines_by_step], company, client, bot_challenge)
+    an.wall = w.to_dict()
+    src = "user_browser" if client and not w.path_sources.get("capture") else "referenced_routes"
+    if w.route_strength:
+        groups = [g for g in ROUTE_LABEL if g in w.route_groups]
+        an.indicators.append(Indicator(
+            type="route_vocabulary", strength="strong" if w.route_strength == "task" else "medium",
+            excerpt=", ".join(w.route_groups[g] for g in groups[:5])[:200], source=src,
+            details={"groups": groups, "strength": w.route_strength, "paths_seen": len(w.paths),
+                     "from": w.path_sources}))
+    if w.brand_bait:
+        an.indicators.append(Indicator(type="brand_bait", strength="medium", excerpt=", ".join(w.brand_bait[:6]),
+                                       source="asset_name", details={"brands": w.brand_bait[:10]}))
+    if w.invite_gated:
+        an.indicators.append(Indicator(type="invite_gated_registration", strength="medium",
+                                       excerpt="invite code in the address" if w.invite_gated == "url"
+                                       else "required or pre-filled invitation-code field",
+                                       source="page_structure", details={"how": w.invite_gated}))
+    if w.security_password:
+        an.indicators.append(Indicator(type="security_password", strength="medium",
+                                       excerpt={"field": "separate security/fund password field",
+                                                "text": "page asks for a security/fund password",
+                                                "route": "security-password route referenced"}[w.security_password],
+                                       source="page_structure", details={"how": w.security_password}))
+    if w.phone_only:
+        an.indicators.append(Indicator(type="phone_only_signup", strength="weak",
+                                       excerpt=f"phone number only{(' (' + w.country_code + ')') if w.country_code else ''}, no e-mail",
+                                       source="page_structure"))
+    if w.registration_wall and not w.company_identity:
+        an.indicators.append(Indicator(type="no_company_identity", strength="weak",
+                                       excerpt="no company name, address, terms, privacy or contact link",
+                                       source="page_structure"))
+    if w.scam_register_route:
+        an.indicators.append(Indicator(type="scam_register_route", strength="medium",
+                                       excerpt=urlsplit_path(an.page_url)[:120], source="page_structure"))
+    if w.h5_shell:
+        an.indicators.append(Indicator(type="h5_app_shell", strength="weak", excerpt="uni-app / H5 app shell",
+                                       source="page_structure"))
+    if w.random_label or w.abused_tld:
+        an.indicators.append(Indicator(type="domain_shape", strength="weak", host_ref=an.page_host,
+                                       details={"random_label": w.random_label, "abused_tld": w.abused_tld},
+                                       source="domain"))
+    if bot_challenge and not client:
+        an.indicators.append(Indicator(type="bot_challenge", strength="info",
+                                       excerpt="bot-challenge page instead of the site", source="visible_page"))
+
+
+def urlsplit_path(url: str) -> str:
+    from urllib.parse import urlsplit
+
+    return urlsplit(url).path

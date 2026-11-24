@@ -9,6 +9,7 @@ with caps on request count and response size, and refuses private-network target
 from __future__ import annotations
 
 import asyncio
+import re
 import json
 import sys
 import tempfile
@@ -206,7 +207,7 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
     budget = _Budget(settings.capture_timeout_s)
     allow_hosts, allow_private = settings.capture_allow_hosts, settings.capture_allow_private
     start_site = registrable_domain(urlsplit(url).hostname or "")
-    state = {"phase": "initial", "requests": 0, "bytes": 0}
+    state = {"phase": "initial", "requests": 0, "bytes": 0, "scripts": [], "loaded": set(), "chunk_entries": []}
 
     def block(reason: str) -> None:
         res.blocked[reason] = res.blocked.get(reason, 0) + 1
@@ -286,6 +287,10 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                 except ValueError:
                     cl = 0
                 state["bytes"] += cl
+                state["loaded"].add(r.url.split("#")[0])
+                if (r.request.resource_type == "script" and len(state["scripts"]) < 60
+                        and registrable_domain(urlsplit(r.url).hostname or "") == start_site):
+                    state["scripts"].append(r)
 
             page.on("response", on_response)
 
@@ -369,6 +374,8 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
                         except PWError as e:
                             log("action_failed", kind=kind, error=str(e).splitlines()[0][:200])
                 res.final_url = _http_url(page.url, res.final_url or url)
+            if res.status == "ok" and budget.left() > 2:
+                await _fetch_chunks(context, page, state, start_site, allow_hosts, allow_private, budget, log)
             res.request_count = state["requests"]
             await context.close()
         finally:
@@ -377,6 +384,8 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
     try:
         if har_path.exists():
             res.har = json.loads(har_path.read_text(encoding="utf-8", errors="replace"))
+            if state["chunk_entries"]:
+                res.har.setdefault("log", {}).setdefault("entries", []).extend(state["chunk_entries"])
     except (OSError, ValueError) as e:
         log("har_read_failed", error=str(e)[:200])
     finally:
@@ -389,6 +398,97 @@ async def _capture_async(url: str, lang: str, run_actions: bool, collect_nav: bo
     res.finished_at = _now()
     log("finish", status=res.status, requests=res.request_count, blocked=res.blocked)
     return res
+
+
+# ---- extra delivered code: same-origin JS/JSON chunks referenced by bundles the page already loaded -------------
+CHUNK_REF_RE = re.compile(r"""["'`]((?:\.{1,2}/|/)?[A-Za-z0-9_\-][A-Za-z0-9_\-./]{0,180}\.(?:m?js|json))["'`]""")
+CHUNK_SKIP_RE = re.compile(r"/(api|admin|cdn-cgi|login|logout|user|users|account|auth|oauth|pay|payment|order|orders)(/|$)"
+                           r"|\.\./\.\./", re.I)
+CHUNK_JSON_DIR_RE = re.compile(r"/(static|assets|locales?|i18n|lang|langs|js|dist|build|_next|_nuxt)/", re.I)
+
+
+def _chunk_candidates(text: str, script_url: str, start_site: str) -> list[str]:
+    from urllib.parse import urljoin
+
+    out = []
+    parts = urlsplit(script_url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    for ref in CHUNK_REF_RE.findall(text[:3_000_000]):
+        if ref.startswith(("/", "./", "../")):
+            full = origin + ref if ref.startswith("/") else urljoin(script_url, ref)
+        elif "/" in ref:
+            full = origin + "/" + ref
+        else:
+            full = urljoin(script_url, ref)
+        u = urlsplit(full)
+        if registrable_domain(u.hostname or "") != start_site or CHUNK_SKIP_RE.search(u.path):
+            continue
+        if u.path.endswith(".json") and not CHUNK_JSON_DIR_RE.search(u.path):
+            continue
+        out.append(f"{u.scheme}://{u.netloc}{u.path}")
+    return list(dict.fromkeys(out))
+
+
+async def _fetch_chunks(context, page, state: dict, start_site: str, allow_hosts, allow_private, budget, log) -> None:  # noqa: ANN001
+    """Fetch same-origin static .js/.json files that already-loaded bundles reference but the page did not request
+    (lazy route chunks, language packs). GET only, no HTML, no API paths, no form submits, no redirects followed;
+    capped at CHUNK_FETCH_MAX_FILES files / CHUNK_FETCH_MAX_BYTES bytes and spaced CHUNK_FETCH_GAP_S apart.
+    The bodies go through the normal sanitizer, delivered-code reading and kit fingerprinting."""
+    from playwright.async_api import Error as PWError
+
+    max_files, max_bytes, gap = settings.chunk_fetch_max_files, settings.chunk_fetch_max_bytes, settings.chunk_fetch_gap_s
+    queue: list[str] = []
+    for r in state["scripts"]:
+        try:
+            body = await r.text()
+        except PWError:
+            continue
+        queue.extend(_chunk_candidates(body, r.url, start_site))
+    seen, fetched, total = set(state["loaded"]), 0, 0
+    while queue and fetched < max_files and total < max_bytes and budget.left() > 1.5:
+        url = queue.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        if not request_allowed(url, allow_hosts, allow_private):
+            continue
+        target, headers = url, {"Referer": page.url}
+        u = urlsplit(url)
+        if (u.hostname or "").endswith(".localhost"):
+            # Chromium resolves *.localhost itself; the request API does not (local test sites only).
+            target = url.replace(u.netloc, "127.0.0.1" + (f":{u.port}" if u.port else ""), 1)
+            headers["Host"] = u.netloc
+        try:
+            resp = await context.request.get(target, headers=headers, max_redirects=0,
+                                             timeout=min(4000, budget.ms(4)))
+        except PWError as e:
+            log("chunk_fetch_failed", url=url[:160], error=str(e).splitlines()[0][:120])
+            continue
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if resp.status != 200 or not re.search(r"javascript|ecmascript|json", ctype) or "html" in ctype:
+            await asyncio.sleep(gap)
+            continue
+        body = await resp.body()
+        if total + len(body) > max_bytes:
+            break
+        total += len(body)
+        fetched += 1
+        text = body.decode("utf-8", "replace")
+        state["chunk_entries"].append({
+            "startedDateTime": _now(), "time": 0, "cache": {}, "timings": {"send": 0, "wait": 0, "receive": 0},
+            "request": {"method": "GET", "url": url, "httpVersion": "HTTP/1.1", "headers": [], "cookies": [],
+                        "queryString": [], "headersSize": -1, "bodySize": 0},
+            "response": {"status": 200, "statusText": "OK", "httpVersion": "HTTP/1.1",
+                         "headers": [{"name": "content-type", "value": ctype}], "cookies": [], "redirectURL": "",
+                         "headersSize": -1, "bodySize": len(body),
+                         "content": {"size": len(body), "mimeType": ctype, "text": text}},
+            "_hami_fetched_by": "capture_chunk_fetch",
+        })
+        if ctype.find("javascript") >= 0 or url.endswith((".js", ".mjs")):
+            queue.extend(c for c in _chunk_candidates(text, url, start_site) if c not in seen)
+        await asyncio.sleep(gap)
+    if fetched or queue:
+        log("chunk_fetch", files=fetched, bytes=total, not_fetched=max(0, len(set(queue) - seen)))
 
 
 def _filter_nav_links(links: list[str], base_url: str, limit: int = 12) -> list[str]:

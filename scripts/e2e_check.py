@@ -72,7 +72,7 @@ def start_local() -> tuple[subprocess.Popen, str, str, int, Path]:
     env = dict(os.environ, HAMI_DATA_DIR=str(tmp / "storage"), HAMI_MODELS_DIR=str(models),
                HAMI_PROCESSED_DIR=str(processed), HAMI_REVIEWER_TOKEN=token, RUN_TESTSITES="true",
                TESTSITE_PORT=str(ts_port), RATE_SCANS_PER_MIN="1000", RATE_DEFAULT_PER_MIN="1000",
-               RATE_LOOKUP_PER_MIN="1000", PYTHONUTF8="1", HAMI_PUBLIC_BASE_URL=f"http://127.0.0.1:{api_port}")
+               RATE_LOOKUP_PER_MIN="1000", PYTHONUTF8="1", DOMAIN_AGE_ENABLED="false", HAMI_PUBLIC_BASE_URL=f"http://127.0.0.1:{api_port}")
     env.pop("HAMI_DB_PATH", None)
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port",
                              str(api_port), "--log-level", "warning"], cwd=BACKEND, env=env)
@@ -222,6 +222,21 @@ def run(c: httpx.Client, site, auth: dict) -> None:  # noqa: ANN001
     check("5d matched files listed as evidence (content-hashed build names)",
           len(files.get("files", [])) >= 3 and any(f.startswith("en-US-") for f in files.get("files", [])),
           ", ".join(files.get("files", [])[:4]))
+
+    print("\nCheck 6: Site E, an invite-gated registration wall from a family Hami has never seen (no reviewed case)")
+    ee = c.post("/scans", json={"url": site("site-e") + "index/user/register/invite_code/QV7K2M.html",
+                                "source_type": "manual", "force": True}).json()
+    check("6a Site E is High risk without any reviewed case or kit match", ee.get("tier") == "high_risk",
+          f"tier={ee.get('tier')} rules={ee.get('rules_fired')}")
+    check("6b decided by the registration gate + task-scam routes (read from a lazy JS chunk the page never loaded)",
+          any(r.startswith("registration_gate+") and "task_route_vocabulary" in r for r in ee.get("rules_fired", [])),
+          str(ee.get("rules_fired")))
+    texts = " ".join(cl["text"]["en"] for cl in ee.get("clues", []))
+    check("6c plain clues: invite code + security password, and the routes", "invite code and a separate security"
+          " password" in texts and "rotation-order" in texts, texts[:160])
+    cc2 = c.post("/scans", json={"url": site("site-c"), "source_type": "manual", "force": True}).json()
+    check("6d legitimate Site C still not flagged", cc2.get("tier") in ("no_strong_signals", "insufficient_evidence"),
+          f"tier={cc2.get('tier')}")
 
 
 if __name__ == "__main__":

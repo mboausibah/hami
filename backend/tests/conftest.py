@@ -16,6 +16,7 @@ os.environ.setdefault("HAMI_REVIEWER_TOKEN", "test-reviewer-token")
 os.environ.setdefault("RATE_SCANS_PER_MIN", "1000")
 os.environ.setdefault("RATE_DEFAULT_PER_MIN", "1000")
 os.environ.setdefault("RATE_LOOKUP_PER_MIN", "1000")
+os.environ["DOMAIN_AGE_ENABLED"] = "false"  # tests never query certificate-transparency services
 
 
 @pytest.fixture()

@@ -55,7 +55,8 @@ var n = class extends Error {
 			listing_name: t.listingName || null,
 			lang: t.lang ?? "en",
 			device_id: this.deviceId,
-			force: t.force ?? !1
+			force: t.force ?? !1,
+			page_signals: t.pageSignals ?? null
 		});
 	}
 	getScan(e, t) {
@@ -957,7 +958,8 @@ async function Oe(e, t) {
 				sourceType: e.sourceType ?? "extension",
 				listingName: e.listingName,
 				lang: n.lang,
-				force: e.force
+				force: e.force,
+				pageSignals: e.pageSignals && !k(e.url, await F()).skip ? e.pageSignals : null
 			});
 			return await Q(t, e.url), {
 				ok: !0,
@@ -994,7 +996,8 @@ async function Oe(e, t) {
 			};
 			let s = await (await G()).scan(e.url, {
 				sourceType: "extension",
-				lang: n.lang
+				lang: n.lang,
+				pageSignals: e.pageSignals ?? null
 			});
 			return await Q(s, e.url), await chrome.storage.session.set({ [`tab:${r}`]: {
 				scanId: s.scan_id,

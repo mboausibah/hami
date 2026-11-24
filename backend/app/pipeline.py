@@ -22,7 +22,7 @@ from app.scoring import ReviewedContext, clue_text, decide
 from app.scoring import texts as T
 from app.scoring.model_store import current_model
 from app.storage import artifact_url, put_artifact, read_artifact
-from app.urls import UnsafeTarget, check_target, ensure_scheme, hostname, normalize_url
+from app.urls import UnsafeTarget, check_target, ensure_scheme, hostname, normalize_url, registrable_domain
 
 SOURCE_TYPES = {"search", "maps", "sms", "whatsapp", "manual", "extension", "discovery", "import"}
 _capture_sem = threading.BoundedSemaphore(max(1, settings.capture_concurrency))
@@ -35,8 +35,13 @@ class ScanError(ValueError):
 # ------------------------------------------------------------------------------------------------
 def submit_scan(url: str, source_type: str = "manual", listing_name: str | None = None, lang: str = "en",
                 batch: str | None = None, parent_scan_id: int | None = None, force: bool = False,
-                run_actions: bool = True, collect_nav: bool = False) -> dict[str, Any]:
-    """Run a full scan and return the result payload. Raises ScanError for invalid/unsafe input."""
+                run_actions: bool = True, collect_nav: bool = False,
+                page_signals: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Run a full scan and return the result payload. Raises ScanError for invalid/unsafe input.
+
+    page_signals: structure of the page as rendered in the user's own browser (extension), used when the server's
+    capture is blocked by a bot challenge or shows little. Validated, stored as evidence, and such scans are never
+    served from the cache to other checks."""
     if source_type not in SOURCE_TYPES:
         raise ScanError(f"invalid source_type: {source_type}")
     if not url or len(url) > 2048:
@@ -51,8 +56,15 @@ def submit_scan(url: str, source_type: str = "manual", listing_name: str | None 
     norm = normalize_url(url)
     host = hostname(norm)
     clean_url = sanitize_url(url)
+    signals = clean_page_signals(page_signals, host)
 
-    if not force:
+    if signals is not None and not force:
+        cached = _recent_scan(norm)
+        if cached is not None:
+            # Re-use the server's recent capture of this URL; add what the user's browser saw (no new visit).
+            return reanalyze_stored(cached["scan_id"], listing_name=listing_name, source_type=source_type, lang=lang,
+                                    page_signals=signals)
+    if not force and signals is None:
         cached = _recent_scan(norm)
         if cached is not None:
             if (cached["listing_name"] or None) == listing_name:
@@ -66,10 +78,12 @@ def submit_scan(url: str, source_type: str = "manual", listing_name: str | None 
     with db() as conn:
         scan_id = conn.execute(
             "INSERT INTO scans (submitted_url, normalized_url, host, source_type, listing_name, lang, batch, "
-            "parent_scan_id, submitted_at, status, access_key) VALUES (?,?,?,?,?,?,?,?,?, 'capturing', ?)",
+            "parent_scan_id, submitted_at, status, access_key, client_signals) VALUES (?,?,?,?,?,?,?,?,?, 'capturing', ?, ?)",
             (clean_url, norm, host, source_type, listing_name, lang, batch, parent_scan_id, utcnow(),
-             secrets.token_urlsafe(16)),
+             secrets.token_urlsafe(16), 1 if signals is not None else 0),
         ).lastrowid
+        if signals is not None:
+            put_artifact(conn, scan_id, "action_log", signals, action_name="browser_page_signals")
     t0 = time.monotonic()
     with _capture_sem:
         res = capture(url, lang=lang, run_actions=run_actions, collect_nav=collect_nav)
@@ -87,7 +101,7 @@ def submit_scan(url: str, source_type: str = "manual", listing_name: str | None 
                      (res.status, res.error[:500] if res.error else None, res.finished_at,
                       sanitize_url(res.final_url) if res.final_url else None, scan_id))
     analyze_and_score(scan_id, source_scan_id=scan_id, listing_name=listing_name, http_status=res.http_status,
-                      capture_status=res.status, stored=False, t0=t0)
+                      capture_status=res.status, stored=False, t0=t0, client=signals)
     payload = get_scan_payload(scan_id)
     if collect_nav:
         payload["nav_links"] = res.nav_links
@@ -95,7 +109,7 @@ def submit_scan(url: str, source_type: str = "manual", listing_name: str | None 
 
 
 def reanalyze_stored(source_scan_id: int, listing_name: str | None = None, source_type: str = "manual",
-                     lang: str = "en") -> dict[str, Any]:
+                     lang: str = "en", page_signals: dict[str, Any] | None = None) -> dict[str, Any]:
     """New scan record that re-analyzes an earlier capture without visiting the site."""
     with db() as conn:
         src = conn.execute("SELECT * FROM scans WHERE scan_id=?", (source_scan_id,)).fetchone()
@@ -104,13 +118,16 @@ def reanalyze_stored(source_scan_id: int, listing_name: str | None = None, sourc
         origin = src["stored_from_scan_id"] or src["scan_id"]
         scan_id = conn.execute(
             "INSERT INTO scans (submitted_url, normalized_url, host, source_type, listing_name, lang, submitted_at, "
-            "status, capture_mode, capture_status, captured_at, final_url, stored_from_scan_id, access_key) "
+            "status, capture_mode, capture_status, captured_at, final_url, stored_from_scan_id, access_key, client_signals) "
             "SELECT submitted_url, normalized_url, host, ?, ?, ?, ?, 'analyzing', 'stored', capture_status, captured_at, "
-            "final_url, ?, ? FROM scans WHERE scan_id=?",
-            (source_type, listing_name, lang, utcnow(), origin, secrets.token_urlsafe(16), origin)).lastrowid
+            "final_url, ?, ?, ? FROM scans WHERE scan_id=?",
+            (source_type, listing_name, lang, utcnow(), origin, secrets.token_urlsafe(16),
+             1 if page_signals is not None else 0, origin)).lastrowid
         cap_status = src["capture_status"] or "ok"
+        if page_signals is not None:
+            put_artifact(conn, scan_id, "action_log", page_signals, action_name="browser_page_signals")
     analyze_and_score(scan_id, source_scan_id=origin, listing_name=listing_name, http_status=None,
-                      capture_status=cap_status, stored=True, t0=time.monotonic())
+                      capture_status=cap_status, stored=True, t0=time.monotonic(), client=page_signals)
     return get_scan_payload(scan_id)
 
 
@@ -179,15 +196,18 @@ def load_bundle(conn: sqlite3.Connection, scan_id: int) -> tuple[list[tuple[int,
 
 def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | None, http_status: int | None,
                       capture_status: str, stored: bool, t0: float, live_failure: str | None = None,
-                      asset_source: str = "capture") -> None:
+                      asset_source: str = "capture", client: dict[str, Any] | None = None) -> None:
     with db() as conn:
         scan = conn.execute("SELECT * FROM scans WHERE scan_id=?", (scan_id,)).fetchone()
         steps, har, shots, har_id, htmls = load_bundle(conn, source_scan_id)
         src = conn.execute("SELECT final_url, submitted_url FROM scans WHERE scan_id=?", (source_scan_id,)).fetchone()
+        if client is None:
+            client = _stored_page_signals(conn, scan_id)
         inp = AnalyzerInput(page_url=scan["submitted_url"], final_url=src["final_url"] or "", steps=steps, har=har,
-                            capture_status=capture_status if steps else "load_failed",
-                            http_status=http_status, listing_name=listing_name)
+                            capture_status=capture_status if (steps or client) else "load_failed",
+                            http_status=http_status, listing_name=listing_name, client=client)
         an = analyze(inp)
+        _add_domain_age(an, scan["host"])
         version, model = current_model()
         score, phrases, code_score = None, [], None
         thresholds = {"threshold_agree": 0.5, "threshold_caution": 0.35}
@@ -247,7 +267,8 @@ def analyze_and_score(scan_id: int, source_scan_id: int, listing_name: str | Non
                  json.dumps({"clues": clues, "not_checked": not_checked, "headline_key": decision.headline_key,
                              "strong_links": ctx.strong_links, "partial_links": ctx.partial_links,
                              "domain_inherited": ctx.domain_inherited, "live_failure": live_failure,
-                             "code_mentions": an.code_mentions, "code_behaviors": an.code_behaviors},
+                             "code_mentions": an.code_mentions, "code_behaviors": an.code_behaviors,
+                             "wall": {k: v for k, v in (an.wall or {}).items() if k not in ("paths", "images")}},
                             ensure_ascii=False),
                  an.identity.get("result", "not_checked"), json.dumps(phrases, ensure_ascii=False), version, utcnow(),
                  code_score))
@@ -297,6 +318,11 @@ def _clue_observation(conn: sqlite3.Connection, scan_id: int, clue_type: str) ->
     if clue_type in ("reviewed_case_exact_host", "reviewed_case_link", "classifier_score", "kit_match",
                      "kit_partial", "reviewed_domain"):
         return None
+    if clue_type in ("route_vocabulary", "brand_bait"):
+        return conn.execute("SELECT * FROM observations WHERE scan_id=? AND indicator_type=? ORDER BY obs_id LIMIT 1",
+                            (scan_id, clue_type)).fetchone()
+    if clue_type in ("registration_gate", "young_domain", "domain_shape", "no_company_identity", "bot_challenge"):
+        return None
     source = "delivered_code" if clue_type == "code_behavior" else "visible_page"
     return conn.execute("SELECT * FROM observations WHERE scan_id=? AND indicator_type=? AND source=? "
                         "ORDER BY obs_id LIMIT 1", (scan_id, clue_type, source)).fetchone()
@@ -307,14 +333,14 @@ def _recent_scan(norm: str) -> sqlite3.Row | None:
     with db() as conn:
         return conn.execute(
             "SELECT * FROM scans WHERE normalized_url=? AND status='done' AND capture_status='ok' "
-            "AND submitted_at >= ? ORDER BY scan_id DESC LIMIT 1", (norm, cutoff)).fetchone()
+            "AND COALESCE(client_signals, 0)=0 AND submitted_at >= ? ORDER BY scan_id DESC LIMIT 1", (norm, cutoff)).fetchone()
 
 
 def _last_good_scan(norm: str, exclude: int) -> sqlite3.Row | None:
     with db() as conn:
         return conn.execute(
             "SELECT * FROM scans WHERE normalized_url=? AND status='done' AND capture_status='ok' AND scan_id<>? "
-            "ORDER BY scan_id DESC LIMIT 1", (norm, exclude)).fetchone()
+            "AND COALESCE(client_signals, 0)=0 ORDER BY scan_id DESC LIMIT 1", (norm, exclude)).fetchone()
 
 
 # ------------------------------------------------------------------------------------------------
@@ -380,3 +406,65 @@ def get_scan_payload(scan_id: int, include_internal: bool = False) -> dict[str, 
     if include_internal:
         payload["strong_links"] = extra.get("strong_links", [])
     return payload
+
+
+# ---- page structure from the user's browser + domain age ---------------------------------------------------------
+_SIG_LIMITS = {"paths": (600, 200), "images": (200, 160)}
+_FIELD_KEYS = ("type", "name", "placeholder", "label", "autocomplete")
+
+
+def clean_page_signals(raw: dict[str, Any] | None, host: str) -> dict[str, Any] | None:
+    """Validate and cap what the extension sent: same-host page only, paths without queries, field descriptors
+    without values, image names, redacted visible text. Anything else is dropped."""
+    if not isinstance(raw, dict):
+        return None
+    from app.sanitize import redact_text
+
+    page_host = hostname(str(raw.get("page_url") or ""))
+    if not page_host or registrable_domain(page_host) != registrable_domain(host):
+        return None
+    out: dict[str, Any] = {"page_url": sanitize_url(str(raw.get("page_url")))[:500]}
+    for key, (n, length) in _SIG_LIMITS.items():
+        out[key] = [str(x).split("?")[0].split("#")[0][:length] for x in (raw.get(key) or [])[:n] if isinstance(x, str)]
+    out["fields"] = []
+    for f in (raw.get("fields") or [])[:60]:
+        if isinstance(f, dict):
+            d = {k: redact_text(str(f.get(k) or ""))[:100] for k in _FIELD_KEYS}
+            d.update({k: bool(f.get(k)) for k in ("required", "readonly", "has_value")})
+            out["fields"].append(d)
+    out["title"] = redact_text(str(raw.get("title") or ""))[:200]
+    out["text"] = redact_text(str(raw.get("text") or ""))[:8000]
+    out["identity_links"] = bool(raw.get("identity_links"))
+    out["h5_shell"] = bool(raw.get("h5_shell"))
+    out["lang"] = str(raw.get("lang") or "")[:8]
+    return out
+
+
+def _stored_page_signals(conn: Any, scan_id: int) -> dict[str, Any] | None:
+    row = conn.execute("SELECT path FROM artifacts WHERE scan_id=? AND kind='action_log' AND "
+                       "action_name='browser_page_signals' ORDER BY artifact_id DESC LIMIT 1", (scan_id,)).fetchone()
+    if row is None:
+        return None
+    try:
+        return json.loads(read_artifact(row["path"]))
+    except ValueError:
+        return None
+
+
+def _add_domain_age(an: Analysis, host: str) -> None:
+    """First certificate of the registrable domain (certificate transparency), as evidence for the tier rules."""
+    from app.analyze import Indicator
+    from app.domain_age import cert_age_days
+
+    try:
+        age = cert_age_days(an.page_host or host)
+    except Exception:  # noqa: BLE001 - a lookup failure must never break a scan
+        age = None
+    if an.wall is None:
+        an.wall = {}
+    an.wall["cert_age_days"] = age
+    if age is not None and age < 90:
+        an.indicators.append(Indicator(type="young_domain", strength="strong" if age < 30 else "medium",
+                                       host_ref=registrable_domain(an.page_host or host), source="domain",
+                                       excerpt=f"first certificate {age} days ago",
+                                       details={"cert_age_days": age, "source": "certificate transparency"}))

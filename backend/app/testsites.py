@@ -16,6 +16,10 @@ _started: dict[int, http.server.ThreadingHTTPServer] = {}
 
 
 class _Handler(http.server.SimpleHTTPRequestHandler):
+    # Explicit types: on Windows, Python reads MIME types from the registry, which can map .js to text/plain.
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                      ".js": "application/javascript", ".mjs": "application/javascript", ".json": "application/json"}
+
     def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
         super().__init__(*args, directory=str(SITES_DIR), **kwargs)
 

@@ -6,6 +6,7 @@
  *     result; the full-page banner appears only for High risk. */
 import { TIERS, t, type Lang, type ScanResult } from "@hami/shared";
 import { send, type ClassifyData, type SnapshotResource } from "../lib/messages";
+import { collectPageSignals } from "../lib/pagesignals";
 import { autoCheckActive, getSettings } from "../lib/settings";
 import { WIDGET_CSS, dirFor } from "./overlay";
 
@@ -169,7 +170,7 @@ async function main(): Promise<void> {
   if (cls.data.skip || !autoCheckActive(s)) return; // sensitive / well-known / no consent: nothing is sent
   const reasons = [...cls.data.reasons];
   if (pageSignals() >= 1) reasons.push("page_signals");
-  const res = await send<ScanResult>({ type: "autoCheck", url: location.href, reasons });
+  const res = await send<ScanResult>({ type: "autoCheck", url: location.href, reasons, pageSignals: safeSignals() });
   if (res.ok && res.data.tier === "high_risk") {
     const style = TIERS.high_risk;
     showBanner(lang, `${t("autoCheckTitle", lang)}: ${style.label[lang]}`, res.data.headline?.[lang] ?? style.headline[lang],
@@ -178,5 +179,23 @@ async function main(): Promise<void> {
   document.dispatchEvent(new CustomEvent("hami-candidate", { detail: { checked: res.ok } }));
   if (s.idleSnapshots) watchIdle(lang);
 }
+
+function safeSignals(): ReturnType<typeof collectPageSignals> | null {
+  try {
+    return collectPageSignals();
+  } catch {
+    return null;
+  }
+}
+
+// The popup's "Check this page" asks this tab for its structure (computed here, on the device). Skipped sites
+// (banks, government, health, well-known) never answer with anything.
+chrome.runtime.onMessage.addListener((msg: { type?: string }, _sender, sendResponse) => {
+  if (msg?.type !== "collectPageSignals") return false;
+  void send<ClassifyData>({ type: "classify", url: location.href, resourceNames: resourceNames() }).then((cls) => {
+    sendResponse(cls.ok && !cls.data.skip ? safeSignals() : null);
+  });
+  return true;
+});
 
 void main();

@@ -239,6 +239,43 @@ def main() -> int:
             check("Site C shield from hostname lookup: no strong signals", tiers[1] == "no_strong_signals", str(tiers))
             check("unknown site gets a neutral shield", tiers[2] == "", str(tiers))
             page.screenshot(path=str(shots / "search_shields.png"))
+
+            # Unseen scam behind a bot challenge: the server's capture only gets the challenge page (site-f), while the
+            # user's browser gets the real registration page (served here to the extension's browser only). The
+            # popup sends the page STRUCTURE computed on the device; field values never leave it.
+            blocked_url = site("site-f") + "index/user/register/invite_code/ZX81PQ.html"
+            real_html = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Mobile phone number login</title></head>
+<body><h2>Nimbara Orders</h2><form action="/index/user/do_register" method="post">
+<span>+971</span><input type="tel" name="username" placeholder="Enter mobile number" maxlength="11">
+<input type="password" name="password" placeholder="Login password">
+<input type="password" name="paypassword" placeholder="Security password">
+<input type="text" name="invite_code" value="PLANTEDVALUE42" readonly required>
+<button>Register</button></form>
+<a href="/index/user/login.html">Login</a>
+<script>var nav = ["/index/ctrl/recharge.html", "/index/rot_order/index.html", "/index/my/invite"];</script>
+<p>Copyright (c) 2026</p></body></html>"""
+            ctx.route(blocked_url, lambda route: route.fulfill(status=200, content_type="text/html", body=real_html))
+            tab = ctx.new_page()
+            tab.goto(blocked_url)
+            tab.fill("input[name=password]", "TypedSecret!9")
+            tab.fill("input[name=username]", "0501234567")
+            pop = ctx.new_page()
+            pop.set_viewport_size({"width": 400, "height": 900})
+            pop.goto(f"{base}/popup/popup.html?target={blocked_url}")
+            pop.click("#check-btn")
+            pop.wait_for_selector(".hami-card", timeout=90000)
+            card = pop.inner_text("#result")
+            check("page blocked for the server, seen by the browser: High risk from on-device page structure",
+                  "High risk" in card and "invite code and a separate security password" in card, card[:120].replace("\n", " "))
+            check("clue names the task-scam routes the page links to", "rotation-order" in card and "recharge" in card)
+            sig_files = list((Path(tmp) / "storage").rglob("*.log.json"))
+            sent = [f.read_text(encoding="utf-8") for f in sig_files if "paypassword" in f.read_text(encoding="utf-8")]
+            check("page structure stored as evidence; no field values, typed password or phone number sent",
+                  bool(sent) and not any(x in t for t in sent for x in ("PLANTEDVALUE42", "TypedSecret", "0501234567")),
+                  f"{len(sent)} signal artifact(s)")
+            pop.screenshot(path=str(shots / "unseen_scam_card.png"), full_page=True)
+            pop.close()
+            tab.close()
             ctx.close()
 
             # PART 4: investigator mode in a second profile. Chrome's permission prompt cannot be clicked under

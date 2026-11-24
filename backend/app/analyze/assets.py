@@ -146,7 +146,7 @@ def extract_assets(har: dict | None) -> list[AssetFile]:
         text = content.get("text") if kind in ("js", "css") else None
         a = AssetFile(url=f"{u.scheme}://{host}{u.path}", host=host, file_name=name[:200], chunk_name=chunk,
                       name_hashed=hashed, kind=kind, sha256=sha, size=content.get("_hami_size"), text=text,
-                      common=bool(common_service_category(host)) or common_file_name(name))
+                      common=bool(common_service_category(host)) or common_file_name(name) or "/cdn-cgi/" in u.path)
         if text and len(text) > 2000 and not a.common:
             a.sketch = sketch(text)
         out.append(a)
@@ -186,7 +186,8 @@ def code_strings(assets: list[AssetFile], max_chars: int = 150_000) -> tuple[lis
     lines: list[str] = []
     seen: set[str] = set()
     total = 0
-    own_js = [a for a in assets if a.kind == "js" and a.text and not a.common and not is_vendor_chunk(a.chunk_name, a.file_name)]
+    own_js = [a for a in assets if a.kind == "js" and a.text and not a.common and "/cdn-cgi/" not in a.url
+              and not is_vendor_chunk(a.chunk_name, a.file_name)]
     # Language packs and app chunks first (most informative), then the rest.
     own_js.sort(key=lambda a: (0 if re.match(r"^[a-z]{2}(-[A-Za-z]{2})?$", a.chunk_name or "") else 1, -(a.size or 0)))
     for a in own_js:

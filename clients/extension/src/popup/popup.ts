@@ -1,4 +1,4 @@
-import { hostOf, isCheckableUrl, t, type HamiAlert, type Lang, type ScanResult } from "@hami/shared";
+import { hostOf, isCheckableUrl, t, type HamiAlert, type Lang, type PageSignals, type ScanResult } from "@hami/shared";
 import { MAPS } from "../selectors";
 import { send, type AlertsData } from "../lib/messages";
 import { getSettings } from "../lib/settings";
@@ -117,6 +117,7 @@ async function runCheck(force: boolean): Promise<void> {
     sourceType: listing ? (/google\.com\/maps/.test(targetUrl) ? "maps" : "search") : "extension",
     listingName: listing || null,
     force,
+    pageSignals: await tabSignals(targetUrl),
   });
   btn.disabled = false;
   if (!res.ok) {
@@ -126,6 +127,21 @@ async function runCheck(force: boolean): Promise<void> {
   }
   status.hidden = true;
   await render(res.data);
+}
+
+/** Ask the open tab for its page structure (computed on the device by the content script). */
+async function tabSignals(url: string): Promise<PageSignals | null> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find((x) => x.url === url) ?? tabs.find((x) => x.active && x.url === url);
+    if (tab?.id === undefined) return null;
+    return await Promise.race([
+      chrome.tabs.sendMessage(tab.id, { type: "collectPageSignals" }) as Promise<PageSignals | null>,
+      new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+    ]);
+  } catch {
+    return null;
+  }
 }
 
 async function render(r: ScanResult): Promise<void> {

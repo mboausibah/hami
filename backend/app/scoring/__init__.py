@@ -15,6 +15,14 @@ Caution    - fraud signals without classifier agreement, a listing-identity mism
 No strong signals - otherwise; wording says it is not a guarantee.
 Insufficient evidence - only when there is no usable page text, no usable code text and no kit, domain or
              infrastructure match (failed load, sign-in wall, cloaking, too little content).
+Registration walls (any scam type; app/analyze/walls.py):
+High risk  - invite-gated registration or a separate security/fund password AND at least one of: first certificate
+             under 30 days, task-scam route vocabulary in the site's delivered pages/code, brand-bait logos, a kit
+             match with a confirmed case.
+Caution    - two or more registration, route or domain signals; or a registration/login wall with any scam
+             registration or task-route signal.
+A registration/login wall or bot-challenge page with no other evidence is Insufficient evidence, never
+"No strong signals". A referral code on an established site cannot reach High on its own.
 Weak signals (common analytics, CDN, hosting, payment providers, common libraries) never raise the tier alone.
 """
 from __future__ import annotations
@@ -27,11 +35,13 @@ from app.scoring import texts as T
 
 FRAUD_BEHAVIORS = ("deposit_to_unlock", "advance_fee", "commission_transfer", "gambling_deposit",
                    "investment_promise", "credential_request")
-CLUE_PRIORITY = ("identity_mismatch", "reviewed_case_exact_host", "reviewed_domain", "kit_match",
+CLUE_PRIORITY = ("identity_mismatch", "reviewed_case_exact_host", "reviewed_domain", "kit_match", "route_vocabulary",
+                 "registration_gate", "young_domain", "brand_bait",
                  "deposit_to_unlock", "advance_fee", "commission_transfer", "credential_request", "gambling_deposit",
                  "investment_promise", "reviewed_case_link", "kit_partial", "code_behavior", "vip_table",
                  "withdrawal_condition", "invitation_code", "commission_rate", "off_platform_contact",
-                 "deposit_request", "task_earning", "gambling", "fake_shop_discount", "classifier_score")
+                 "deposit_request", "task_earning", "gambling", "fake_shop_discount", "no_company_identity",
+                 "domain_shape", "classifier_score", "bot_challenge")
 AMOUNT_CLUES = {"deposit_to_unlock", "advance_fee", "deposit_request"}
 CODE_MIN_WORDS = 40
 
@@ -86,6 +96,8 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
         not_checked.append("stored_capture")
     if an.identity.get("result") == "unclear":
         not_checked.append("identity_unclear")
+    if flags.get("bot_challenge"):
+        not_checked.append("bot_challenge")
 
     tier = None
     headline = None
@@ -103,6 +115,21 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
         tier = "high_risk"
         fired.append("reviewed_case_link+fraud_behavior")
         headline = headline or (behaviors[0] if behaviors else None)
+    # ---- registration walls / referenced routes / domain (scam-type agnostic) ----------------------------------
+    from app.analyze.walls import wall_counts
+
+    w = an.wall or {}
+    ws = wall_counts(w)
+    age = w.get("cert_age_days")
+    gate = ws["invite_gated"] or ws["security_password"]
+    route_task = w.get("route_strength") == "task"
+    gate_support = [k for k, ok in (("domain_under_30_days", age is not None and age < 30),
+                                    ("task_route_vocabulary", route_task),
+                                    ("brand_bait_logos", ws["brand_bait"]),
+                                    ("kit_match", bool(ctx.kit_strong or ctx.kit_partial))) if ok]
+    if gate and gate_support and not reviewed_legit:
+        tier = "high_risk"
+        fired.append("registration_gate+" + "+".join(gate_support))
     if thin_page and not reviewed_legit:
         if ctx.kit_strong:
             tier = "high_risk"
@@ -130,6 +157,14 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
         # page it also needs the classifier to agree on the code text.
         if code_behaviors and not reviewed_legit and (thin_page or code_agree):
             caution_reasons.append("fraud_behavior_in_delivered_code")
+        wall_signals = [k for k in ("invite_gated", "security_password", "scam_register_route", "no_company_identity",
+                                    "route_vocab", "brand_bait", "young_domain", "domain_shape", "h5_shell") if ws[k]]
+        if len(wall_signals) >= 2 and not reviewed_legit:
+            caution_reasons.append("registration_route_domain_signals:" + ",".join(wall_signals))
+        elif w.get("registration_wall") and not reviewed_legit and (
+                ws["security_password"] or ws["scam_register_route"] or route_task or ws["brand_bait"]
+                or (ws["invite_gated"] and ws["no_company_identity"])):
+            caution_reasons.append("registration_wall_with_scam_signal")
         if caution_reasons:
             tier = "caution"
             fired.extend(caution_reasons)
@@ -139,7 +174,11 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
     if tier is None:
         no_match = not (ctx.strong_links or ctx.partial_links or ctx.domain_inherited)
         insufficient = []
-        if thin_page and not code_usable and no_match:
+        if not reviewed_legit and no_match and flags.get("bot_challenge"):
+            insufficient.append("bot_challenge")
+        elif not reviewed_legit and no_match and w.get("registration_wall") and not (behaviors or above_caution):
+            insufficient.append("registration_or_login_wall")
+        if not insufficient and thin_page and not code_usable and no_match:
             for k, name in (("load_failed", "load_failed"), ("signin_wall", "signin_wall"),
                             ("cloaking_suspected", "cloaking"), ("thin_content", "thin_content")):
                 if flags.get(k):
@@ -174,9 +213,24 @@ def decide(an: Analysis, score: float | None, thresholds: dict[str, float], ctx:
         present.add("code_behavior")
     if tier in ("high_risk", "caution") and above_caution and not behaviors:
         present.add("classifier_score")
+    if tier in ("high_risk", "caution"):
+        if w.get("route_strength"):
+            present.add("route_vocabulary")
+        if gate:
+            present.add("registration_gate")
+        if age is not None and age < 90:
+            present.add("young_domain")
+        if ws["brand_bait"]:
+            present.add("brand_bait")
+        if ws["no_company_identity"]:
+            present.add("no_company_identity")
+        if ws["domain_shape"]:
+            present.add("domain_shape")
+    if tier == "insufficient_evidence" and flags.get("bot_challenge"):
+        present.add("bot_challenge")
     clue_types = [c for c in CLUE_PRIORITY if c in present]
     if tier in ("no_strong_signals", "insufficient_evidence"):
-        clue_types = [c for c in clue_types if c in ("identity_mismatch",)]
+        clue_types = [c for c in clue_types if c in ("identity_mismatch", "bot_challenge")]
     return Decision(tier=tier, rules_fired=fired, clue_types=clue_types[:3],
                     not_checked=list(dict.fromkeys(not_checked)), headline_key=headline)
 
@@ -218,6 +272,12 @@ def clue_text(clue_type: str, an: Analysis, ctx: ReviewedContext, excerpt: str |
         fmt_ar.update(domain=ctx.domain_inherited["domain"])
     if clue_type == "code_behavior":
         en, ar = T.mentions_phrase(an.code_mentions)
+        fmt_en.update(things=en)
+        fmt_ar.update(things=ar)
+    if clue_type in ("route_vocabulary", "registration_gate", "young_domain", "brand_bait", "domain_shape"):
+        from app.scoring.texts import wall_phrases
+
+        en, ar = wall_phrases(clue_type, an.wall or {})
         fmt_en.update(things=en)
         fmt_ar.update(things=ar)
     if clue_type == "reviewed_case_link" and ctx.strong_links:

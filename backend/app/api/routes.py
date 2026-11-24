@@ -35,6 +35,9 @@ class ScanIn(BaseModel):
     lang: Literal["ar", "en"] = "en"
     device_id: str | None = Field(default=None, max_length=64)
     force: bool = False
+    # Structure of the page as rendered in the user's browser (extension): same-host paths without queries,
+    # image names, form-field descriptors without values, redacted visible text. Optional.
+    page_signals: dict | None = None
 
 
 @router.post("/scans", dependencies=[Depends(rate_limit("scans"))])
@@ -42,8 +45,10 @@ async def create_scan(body: ScanIn) -> dict:
     valid_device_id(body.device_id)
     try:
         # The device ID is used only for rate limiting; it is never stored with the scan.
+        if body.page_signals is not None and len(json.dumps(body.page_signals)) > 200_000:
+            raise ScanError("page_signals too large")
         return await run_in_threadpool(submit_scan, body.url, body.source_type, body.listing_name, body.lang,
-                                       None, None, body.force)
+                                       None, None, body.force, True, False, body.page_signals)
     except ScanError as e:
         raise HTTPException(400, str(e)) from e
 

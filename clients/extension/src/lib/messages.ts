@@ -1,4 +1,4 @@
-import type { HamiAlert, HostLookup, ScanResult, SourceType, Watch } from "@hami/shared";
+import type { HamiAlert, HostLookup, PageSignals, ScanResult, SourceType, Watch } from "@hami/shared";
 import type { Classification } from "./prefilter";
 
 /** A resource the page loaded, already sanitized on the device: no query string, no fragment, no headers,
@@ -20,7 +20,8 @@ export interface SnapshotPayload {
 
 /** Messages from popup / pages / content scripts to the background service worker. */
 export type Request =
-  | { type: "scan"; url: string; sourceType?: SourceType; listingName?: string | null; force?: boolean }
+  | { type: "scan"; url: string; sourceType?: SourceType; listingName?: string | null; force?: boolean;
+      pageSignals?: PageSignals | null }
   | { type: "getScan"; scanId: number; key: string }
   | { type: "lookup"; hosts: string[] }
   | { type: "watch"; scanId: number; key: string; host: string }
@@ -30,7 +31,7 @@ export type Request =
   | { type: "syncNow" }
   | { type: "openResult"; scanId: number; key: string }
   | { type: "classify"; url: string; resourceNames?: string[] }
-  | { type: "autoCheck"; url: string; reasons: string[] }
+  | { type: "autoCheck"; url: string; reasons: string[]; pageSignals?: PageSignals | null }
   | { type: "consent"; agree: boolean }
   | { type: "snapshot"; payload: SnapshotPayload }
   | { type: "investigatorStart"; tabId?: number; url?: string }

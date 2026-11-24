@@ -172,3 +172,71 @@ def mentions_phrase(mentions: dict[str, int], limit: int = 4) -> tuple[str, str]
     en_s = ", ".join(en[:-1]) + (" and " if len(en) > 1 else "") + en[-1]
     ar_s = "، ".join(ar[:-1]) + (" و" if len(ar) > 1 else "") + ar[-1]
     return en_s, ar_s
+
+
+# ---- registration walls, referenced routes, brand bait, domain age (app/analyze/walls.py) -----------------------
+CLUE_TEXT.update({
+    "route_vocabulary": {"en": "The site's own pages link to {things} routes used by task and deposit scams.",
+                         "ar": "صفحات الموقع نفسها تشير إلى مسارات {things} التي تستخدمها عمليات احتيال المهام والإيداع."},
+    "registration_gate": {"en": "{things}",
+                          "ar": "{things}"},
+    "young_domain": {"en": "{things}", "ar": "{things}"},
+    "brand_bait": {"en": "The site shows logos of {things} although it is not those companies.",
+                   "ar": "يعرض الموقع شعارات {things} رغم أنه ليس تابعًا لهذه الشركات."},
+    "no_company_identity": {"en": "The sign-up page names no company: no address, terms, privacy policy or contact details.",
+                            "ar": "صفحة التسجيل لا تذكر أي شركة: لا عنوان ولا شروط ولا سياسة خصوصية ولا بيانات تواصل."},
+    "domain_shape": {"en": "{things}", "ar": "{things}"},
+    "bot_challenge": {"en": "The site showed Hami's safe check a bot challenge instead of its page, so it could not be read "
+                            "from the server. Check it with the Hami button while the page is open in your browser.",
+                      "ar": "عرض الموقع لفحص حامي الآمن صفحة تحقق من الروبوتات بدلًا من محتواه، لذلك تعذّرت قراءته من الخادم. "
+                            "افحصه بزر حامي أثناء فتح الصفحة في متصفحك."},
+})
+NOT_CHECKED.update({
+    "bot_challenge": {"en": "The site answered the server's check with a bot challenge, so its real page was not seen.",
+                      "ar": "أجاب الموقع على فحص الخادم بصفحة تحقق من الروبوتات، فلم تُرَ صفحته الحقيقية."},
+    "registration_or_login_wall": {"en": "The page is a sign-up or login form; what it leads to was not visible.",
+                                   "ar": "الصفحة نموذج تسجيل أو دخول، ولم يظهر ما يؤدي إليه."},
+})
+
+
+def _join(items: list[str], lang: str) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    sep, last = (", ", " and ") if lang == "en" else ("، ", " و")
+    return sep.join(items[:-1]) + last + items[-1]
+
+
+def wall_phrases(clue_type: str, w: dict) -> tuple[str, str]:
+    """(English, Arabic) wording for the wall clues, built from what was actually observed."""
+    from app.analyze.walls import ROUTE_LABEL
+
+    if clue_type == "route_vocabulary":
+        groups = [g for g in ROUTE_LABEL if g in (w.get("route_groups") or {})][:4]
+        return _join([ROUTE_LABEL[g][0] for g in groups], "en"), _join([ROUTE_LABEL[g][1] for g in groups], "ar")
+    if clue_type == "registration_gate":
+        inv, sec = bool(w.get("invite_gated")), bool(w.get("security_password"))
+        if inv and sec:
+            return ("Registration needs an invite code and a separate security password.",
+                    "التسجيل يتطلب رمز دعوة وكلمة مرور أمان منفصلة.")
+        if inv:
+            return ("Registration only works with an invite code.", "التسجيل لا يتم إلا برمز دعوة.")
+        return ("The site asks for a separate security or fund password.",
+                "يطلب الموقع كلمة مرور منفصلة للأمان أو للأموال.")
+    if clue_type == "young_domain":
+        n = w.get("cert_age_days")
+        return (f"This domain's first certificate was issued {n} days ago.",
+                f"صدرت أول شهادة أمان لهذا النطاق قبل {n} يومًا.")
+    if clue_type == "brand_bait":
+        brands = [b.capitalize() for b in (w.get("brand_bait") or [])[:4]]
+        return _join(brands, "en"), _join(brands, "ar")
+    if clue_type == "domain_shape":
+        tld = w.get("abused_tld")
+        if w.get("random_label") and tld:
+            return (f"The address is a random-looking name on .{tld}, an ending often used by short-lived scam sites.",
+                    f"العنوان اسم يبدو عشوائيًا بامتداد .{tld} الذي تستخدمه كثيرًا مواقع احتيال قصيرة العمر.")
+        if w.get("random_label"):
+            return ("The address is a random-looking name with no company behind it.",
+                    "العنوان اسم يبدو عشوائيًا ولا تقف خلفه شركة.")
+        return (f"The address ends in .{tld}, an ending often used by short-lived scam sites.",
+                f"ينتهي العنوان بـ .{tld} وهو امتداد تستخدمه كثيرًا مواقع احتيال قصيرة العمر.")
+    return "", ""

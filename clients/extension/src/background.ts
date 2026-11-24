@@ -131,6 +131,8 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
         listingName: req.listingName,
         lang: s.lang,
         force: req.force,
+        // Page structure only for the page itself, and never for sites the on-device pre-filter skips.
+        pageSignals: req.pageSignals && !classify(req.url, await getLists()).skip ? req.pageSignals : null,
       });
       await rememberResult(r, req.url);
       return { ok: true, data: r };
@@ -152,7 +154,7 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
         return { ok: true, data: cached.result };
       }
       if (!(await autoAllowed(host))) return { ok: false, error: "rate limited on this device" };
-      const r = await (await api()).scan(req.url, { sourceType: "extension", lang: s.lang });
+      const r = await (await api()).scan(req.url, { sourceType: "extension", lang: s.lang, pageSignals: req.pageSignals ?? null });
       await rememberResult(r, req.url);
       await chrome.storage.session.set({ [`tab:${tabId}`]: { scanId: r.scan_id, key: r.access_key, url: req.url, reasons: req.reasons } });
       await showTabBadge(tabId, r.tier);

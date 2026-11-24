@@ -1,5 +1,5 @@
 import { normalizeBaseUrl } from "./config";
-import type { HamiAlert, Health, HighRiskList, HostLookup, Lang, ScanResult, SourceType, Watch } from "./types";
+import type { HamiAlert, Health, HighRiskList, HostLookup, Lang, PageSignals, ScanResult, SourceType, Watch } from "./types";
 
 export class HamiApiError extends Error {
   constructor(
@@ -16,6 +16,8 @@ export interface ScanOptions {
   listingName?: string | null;
   lang?: Lang;
   force?: boolean;
+  /** Page structure from the user's browser (paths, field descriptors, image names; no values). */
+  pageSignals?: PageSignals | null;
 }
 
 /** Typed client for the Hami API. The device ID is sent only as a rate-limit key and for watches. */
@@ -73,6 +75,7 @@ export class HamiApi {
       lang: opts.lang ?? "en",
       device_id: this.deviceId,
       force: opts.force ?? false,
+      page_signals: opts.pageSignals ?? null,
     });
   }
 

@@ -102,3 +102,18 @@ export interface Health {
   scans: number;
   reviewer_token_configured: boolean;
 }
+
+/** Structure of a page as rendered in the user's browser (computed on the device; see extension lib/pagesignals.ts).
+ * Never contains field values, query strings or cookies. */
+export interface PageSignals {
+  page_url: string;
+  title: string;
+  lang: string;
+  text: string;
+  paths: string[];
+  images: string[];
+  fields: { type: string; name: string; placeholder: string; label: string; autocomplete: string;
+            required: boolean; readonly: boolean; has_value: boolean }[];
+  identity_links: boolean;
+  h5_shell: boolean;
+}
